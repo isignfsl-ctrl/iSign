@@ -1,0 +1,2 @@
+-keep class com.isign.app.MainActivity { *; }
+-keep class com.isign.app.MainActivity

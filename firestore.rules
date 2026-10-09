@@ -1,0 +1,72 @@
+rules_version = '2';
+
+// iSign FSL - Production security rules
+// Collections: catalog (admin-managed), user_recordings (user uploads + admin review), 
+// reference_landmarks (admin-curated), devices, users (admin)
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    
+    function isAdmin() {
+      return isSignedIn() && get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.role == 'admin';
+    }
+    
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    // Catalog - admin manages, all signed-in users can read
+    match /catalog/{docId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    // User recordings - users can create/read own, admin can read all + approve/reject
+    match /user_recordings/{recordingId} {
+      allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() 
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.keys().hasAll(['signId', 'userId', 'userName', 'frameCount', 'landmarksUrl', 'handedness', 'handIdx', 'recordedAt'])
+        && request.resource.data.status == 'pending';
+      allow update: if isSignedIn() 
+        && (resource.data.userId == request.auth.uid 
+            || (isAdmin() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'approvedAt', 'approvedBy', 'autoDeleteAt'])));
+      allow delete: if isAdmin();
+    }
+
+    // Reference landmarks - admin only
+    match /reference_landmarks/{docId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    // Devices - user can read own, admin can manage all
+    match /devices/{deviceId} {
+      allow read: if isSignedIn() && (resource.data.ownerUid == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && request.resource.data.ownerUid == request.auth.uid;
+      allow update: if isSignedIn() 
+        && (resource.data.ownerUid == request.auth.uid || isAdmin());
+      allow delete: if isAdmin();
+    }
+
+    // Users - users can read own, admin can manage all
+    match /users/{userId} {
+      allow read: if isSignedIn() && (isOwner(userId) || isAdmin());
+      allow write: if isAdmin();
+    }
+
+    // Admins - admin only
+    match /admins/{adminId} {
+      allow read, write: if isAdmin();
+    }
+
+    // Settings - admin only
+    match /settings/{docId} {
+      allow read, write: if isAdmin();
+    }
+  }
+}

@@ -1,0 +1,55 @@
+name: Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.4'
+          channel: 'stable'
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Get dependencies (mobile)
+        run: flutter pub get
+
+      - name: Get dependencies (shared)
+        run: |
+          cd packages/isign_shared
+          flutter pub get
+
+      - name: Get dependencies (admin)
+        run: |
+          cd admin
+          flutter pub get
+
+      - name: Analyze mobile
+        run: flutter analyze --no-fatal-infos
+
+      - name: Test mobile
+        run: flutter test
+
+      - name: Analyze admin
+        run: |
+          cd admin
+          flutter analyze --no-fatal-infos
+
+      - name: Test admin
+        run: |
+          cd admin
+          flutter test

@@ -1,0 +1,42 @@
+# Build outputs
+.dart_tool/
+build/
+*.apk
+*.aab
+*.appbundle
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# Dependencies
+node_modules/
+packages/.dart_tool/
+
+# Firebase & Signing Secrets (NEVER COMMIT)
+serviceAccountKey.json
+google-services.json
+GoogleService-Info.plist
+android/key.jks
+android/key.properties
+android/app/google-services.json
+ios/Runner/GoogleService-Info.plist
+
+# Local config
+local.properties
+*.local.properties
+
+# Generated code
+*.g.dart
+*.freezed.dart
+*.gr.dart
+
+# Temp scripts
+fix_category_admin.js
+fix_category_ids.js
+FIX_CATEGORY_README.md
+
+# OS
+.DS_Store
+Thumbs.db

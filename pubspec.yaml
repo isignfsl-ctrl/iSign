@@ -1,0 +1,55 @@
+name: isign
+description: "An offline AI-driven Filipino Sign Language (FSL) recording and translation system."
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.0.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+  sqflite: any
+  path: any
+  camera: any
+  video_player: any
+  flutter_tts: any
+  hand_detection: ^3.1.2
+  riverpod: any
+  pdf: any
+  csv: any
+  path_provider: any
+  permission_handler: any
+  share_plus: any
+  intl: any
+  speech_to_text: ^7.4.0
+  firebase_core: ^3.8.0
+  firebase_auth: ^5.3.0
+  cloud_firestore: ^5.4.0
+  firebase_storage: ^12.1.0
+  connectivity_plus: any
+  workmanager: ^0.5.2
+  shared_preferences: ^2.2.2
+  isign_shared:
+    path: packages/isign_shared
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: any
+
+flutter:
+  uses-material-design: true
+  generate: true
+
+  assets:
+    - assets/model/fsl_model_weights.json
+    - assets/seed/fsl_dictionary.json
+    - assets/images/iSign.png
+    - assets/images/iSign-icon.png
+    - assets/images/splash_logo.png
+    - assets/signs/images/.gitkeep
+    - assets/signs/videos/.gitkeep

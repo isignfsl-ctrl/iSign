@@ -1,0 +1,87 @@
+{
+  "categories": [
+    {
+      "category_name": "Alpabeto",
+      "category_name_en": "Alphabet",
+      "signs": [
+        { "sign_name": "A", "sign_name_en": "A", "description": "Nakasara ang kamao, nakapatong ang hinlalaki sa gilid ng hintuturo", "description_en": "Closed fist, thumb resting on the side of the index finger" },
+        { "sign_name": "B", "sign_name_en": "B", "description": "Flat na kamay na magkakadikit ang mga daliri, nakatago ang hinlalaki sa palad", "description_en": "Flat hand with fingers together, thumb tucked into palm" },
+        { "sign_name": "C", "sign_name_en": "C", "description": "Kurbadong kamay na hugis letrang C", "description_en": "Curved hand shaped like the letter C" },
+        { "sign_name": "D", "sign_name_en": "D", "description": "Hintuturo nakaturo pataas, hinlalaki dumidikit sa dulo ng gitnang daliri, nakakulot ang iba pang daliri", "description_en": "Index finger pointing up, thumb touching tip of middle finger, other fingers curled" },
+        { "sign_name": "E", "sign_name_en": "E", "description": "Nakakulot ang mga daliri papasok sa palad, naka-cross ang hinlalaki sa ibabaw (FSL)", "description_en": "Fingers curled inward to palm, thumb crossed over (FSL)" },
+        { "sign_name": "F", "sign_name_en": "F", "description": "Hinlalaki at hintuturo nagdikit na hugis bilog, nakataas ang tatlong daliri", "description_en": "Thumb and index finger touching in a circle, three fingers up" },
+        { "sign_name": "G", "sign_name_en": "G", "description": "Hintuturo at hinlalaki parallel na nakaturo pasulong (horizontal L), nakakulot ang iba pang daliri (FSL)", "description_en": "Index finger and thumb parallel pointing forward (horizontal L), other fingers curled (FSL)" },
+        { "sign_name": "H", "sign_name_en": "H", "description": "Hintuturo at gitnang daliri magkadikit na nakaturo patagilid, hinlalaki nasa palad", "description_en": "Index and middle fingers together pointing sideways, thumb on palm" },
+        { "sign_name": "I", "sign_name_en": "I", "description": "Kalingkingan nakataas, nakakulot ang iba pang daliri", "description_en": "Pinky raised, other fingers curled" },
+        { "sign_name": "J", "sign_name_en": "J", "description": "Kalingkingan na sumusubaybay ng hugis J sa hangin", "description_en": "Pinky tracing the letter J in the air" },
+        { "sign_name": "K", "sign_name_en": "K", "description": "Hintuturo at gitnang daliri nakataas na magkahiwalay, hinlalaki nasa pagitan", "description_en": "Index and middle fingers up and apart, thumb between them" },
+        { "sign_name": "L", "sign_name_en": "L", "description": "Hintuturo at hinlalaki naka-extend na hugis letrang L", "description_en": "Index finger and thumb extended forming an L shape" },
+        { "sign_name": "M", "sign_name_en": "M", "description": "Tatlong daliri (hintuturo, gitna, palasingsingan) nakakulot pababa sa hinlalaki", "description_en": "Three fingers (index, middle, ring) curled down over the thumb" },
+        { "sign_name": "N", "sign_name_en": "N", "description": "Dalawang daliri (hintuturo, gitna) nakakulot pababa sa hinlalaki", "description_en": "Two fingers (index, middle) curled down over the thumb" },
+        { "sign_name": "Ñ", "sign_name_en": "Ñ", "description": "Tulad ng N ngunit may idinagdag na pag-uga ng kamay pakanan at pakaliwa (FSL)", "description_en": "Like N but with an added hand shake left and right (FSL)" },
+        { "sign_name": "NG", "sign_name_en": "NG", "description": "Hintuturo naka-kawit at hinlalaki naka-extend, kumakawing pababa (FSL)", "description_en": "Index finger hooked and thumb extended, hooking downward (FSL)" },
+        { "sign_name": "O", "sign_name_en": "O", "description": "Lahat ng daliri nagdikit sa hinlalaki na hugis bilog", "description_en": "All fingers touching the thumb forming a circle" },
+        { "sign_name": "P", "sign_name_en": "P", "description": "Hintuturo nakaturo pasulong, hinlalaki dumidikit sa gitnang daliri", "description_en": "Index finger pointing forward, thumb touching middle finger" },
+        { "sign_name": "Q", "sign_name_en": "Q", "description": "Hintuturo nakaturo pababa, hinlalaki dumidikit dito", "description_en": "Index finger pointing down, thumb touching it" },
+        { "sign_name": "R", "sign_name_en": "R", "description": "Naka-cross na hintuturo at gitnang daliri na nakaturo pataas", "description_en": "Crossed index and middle fingers pointing up" },
+        { "sign_name": "S", "sign_name_en": "S", "description": "Nakasara ang kamao, naka-cross ang hinlalaki sa harap ng mga daliri", "description_en": "Closed fist, thumb crossed in front of fingers" },
+        { "sign_name": "T", "sign_name_en": "T", "description": "Hinlalaki nasa pagitan ng hintuturo at gitnang daliri, nakasara ang kamao (FSL)", "description_en": "Thumb between index and middle fingers, fist closed (FSL)" },
+        { "sign_name": "U", "sign_name_en": "U", "description": "Hintuturo at gitnang daliri magkadikit na nakaturo pataas", "description_en": "Index and middle fingers together pointing up" },
+        { "sign_name": "V", "sign_name_en": "V", "description": "Hintuturo at gitnang daliri magkahiwalay na hugis V", "description_en": "Index and middle fingers apart forming a V" },
+        { "sign_name": "W", "sign_name_en": "W", "description": "Tatlong daliri (hintuturo, gitna, palasingsingan) magkakahiwalay", "description_en": "Three fingers (index, middle, ring) spread apart" },
+        { "sign_name": "X", "sign_name_en": "X", "description": "Hintuturo naka-kawit na parang tandang pananong", "description_en": "Index finger hooked like a question mark" },
+        { "sign_name": "Y", "sign_name_en": "Y", "description": "Hinlalaki at kalingkingan naka-extend, nakakulot ang iba pang daliri", "description_en": "Thumb and pinky extended, other fingers curled" },
+        { "sign_name": "Z", "sign_name_en": "Z", "description": "Hintuturo sumusubaybay ng hugis Z sa hangin", "description_en": "Index finger tracing the letter Z in the air" }
+      ]
+    },
+    {
+      "category_name": "Mga Karaniwang Parirala",
+      "category_name_en": "Common Phrases",
+      "signs": [
+        { "sign_name": "Mahal Kita", "sign_name_en": "I Love You", "description": "ILY hand sign - naka-extend na hinlalaki, hintuturo at kalingkingan, ikaway mula sa gilid", "description_en": "ILY hand sign - thumb, index finger and pinky extended, waving from the side" },
+        { "sign_name": "Salamat", "sign_name_en": "Thank You", "description": "Patag na kamay na dumadampi sa baba at gumagalaw pasulong papalayo", "description_en": "Flat hand touching the chin and moving forward away" },
+        { "sign_name": "Paalam", "sign_name_en": "Goodbye", "description": "Bukas na kamay na ikinakaway mula sa gilid ng ulo", "description_en": "Open hand waving from the side of the head" },
+        { "sign_name": "Magandang Umaga", "sign_name_en": "Good Morning", "description": "Patag na kamay na gumagalaw pataas mula sa gilid ng baba", "description_en": "Flat hand moving upward from the side of the chin" },
+        { "sign_name": "Magandang Hapon", "sign_name_en": "Good Afternoon", "description": "Patag na kamay na kumakumpas mula sa gilid patungo sa harap", "description_en": "Flat hand gesturing from the side to the front" },
+        { "sign_name": "Magandang Gabi", "sign_name_en": "Good Evening", "description": "Patag na kamay na bumababa mula sa itaas ng ulo", "description_en": "Flat hand moving downward from above the head" },
+        { "sign_name": "Kumusta ka?", "sign_name_en": "How are you?", "description": "Bukas na kamay na nakaturo patungo sa kausap na may nakataas na kilay", "description_en": "Open hand pointing toward the person with raised eyebrows" },
+        { "sign_name": "Mabuti naman", "sign_name_en": "I'm Fine", "description": "Thumbs up o tapik ng palad sa dibdib ng dalawang beses", "description_en": "Thumbs up or palm tapping the chest twice" },
+        { "sign_name": "Walang Anuman", "sign_name_en": "You're Welcome", "description": "Bukas na kamay na umiikot palabas mula sa dibdib", "description_en": "Open hand rotating outward from the chest" },
+        { "sign_name": "Pasensya na", "sign_name_en": "Sorry", "description": "Kamao na kumukuskos paikot sa dibdib", "description_en": "Fist rubbing in circles on the chest" },
+        { "sign_name": "Pakiusap", "sign_name_en": "Please", "description": "Patag na kamay sa dibdib na gumagalaw paikot", "description_en": "Flat hand on the chest moving in circles" },
+        { "sign_name": "Ikinagagalak ko", "sign_name_en": "Nice to Meet You", "description": "Dalawang kamay na nag-shake hands na sinusundan ng pagturo sa sarili", "description_en": "Two hands shaking hands followed by pointing to self" },
+        { "sign_name": "Mawalang galang na", "sign_name_en": "Excuse Me", "description": "Bukas na kamay na kumakaway malapit sa mukha", "description_en": "Open hand waving near the face" }
+      ]
+    },
+    {
+      "category_name": "Mga Bilang",
+      "category_name_en": "Numbers",
+      "signs": [
+        { "sign_name": "Isa", "sign_name_en": "One", "description": "Itaas ang hintuturo, nakakulot ang iba pang daliri", "description_en": "Raise index finger, other fingers curled" },
+        { "sign_name": "Dalawa", "sign_name_en": "Two", "description": "Itaas ang hintuturo at gitnang daliri na magkahiwalay", "description_en": "Raise index and middle fingers apart" },
+        { "sign_name": "Tatlo", "sign_name_en": "Three", "description": "Itaas ang hinlalaki, hintuturo at gitnang daliri", "description_en": "Raise thumb, index and middle fingers" },
+        { "sign_name": "Apat", "sign_name_en": "Four", "description": "Itaas ang apat na daliri, nakatago ang hinlalaki sa palad", "description_en": "Raise four fingers, thumb tucked into palm" },
+        { "sign_name": "Lima", "sign_name_en": "Five", "description": "Ikalat ang lahat ng limang daliri na nakaharap ang palad", "description_en": "Spread all five fingers with palm facing forward" },
+        { "sign_name": "Anim", "sign_name_en": "Six", "description": "Hinlalaki at kalingkingan naka-extend, nakakulot ang iba pang daliri", "description_en": "Thumb and pinky extended, other fingers curled" },
+        { "sign_name": "Pito", "sign_name_en": "Seven", "description": "Hinlalaki dumidikit sa dulo ng hintuturo at gitnang daliri", "description_en": "Thumb touching tips of index and middle fingers" },
+        { "sign_name": "Walo", "sign_name_en": "Eight", "description": "Hinlalaki at hintuturo na hugis letrang L", "description_en": "Thumb and index finger forming an L shape" },
+        { "sign_name": "Siyam", "sign_name_en": "Nine", "description": "Hintuturo na nakakurbang parang kawit", "description_en": "Index finger curved like a hook" },
+        { "sign_name": "Sampu", "sign_name_en": "Ten", "description": "Naka-cross na hintuturo na hugis X o nakabukas na dalawang kamay", "description_en": "Crossed index fingers forming an X or two open hands" }
+      ]
+    },
+    {
+      "category_name": "Mga Pangunahing Galaw",
+      "category_name_en": "Basic Gestures",
+      "signs": [
+        { "sign_name": "Oo", "sign_name_en": "Yes", "description": "Nakasara na kamao na tumatango pataas at pababa (tulad ng pag-oo)", "description_en": "Closed fist nodding up and down (like saying yes)" },
+        { "sign_name": "Hindi", "sign_name_en": "No", "description": "Hintuturo at gitnang daliri na tinatapik ng hinlalaki", "description_en": "Index and middle fingers tapped by the thumb" },
+        { "sign_name": "Tulong", "sign_name_en": "Help", "description": "Bukas na kamay na nakataas ang palad, ikinakaway pataas", "description_en": "Open hand with palm up, waving upward" },
+        { "sign_name": "Kain", "sign_name_en": "Eat", "description": "Kamay na nagdadala ng imahinasyong pagkain sa bibig", "description_en": "Hand bringing imaginary food to the mouth" },
+        { "sign_name": "Inom", "sign_name_en": "Drink", "description": "Hinlalaki sa bibig na tumatagilid paatras", "description_en": "Thumb at the mouth tilting backward" },
+        { "sign_name": "Tulog", "sign_name_en": "Sleep", "description": "Patag na kamay sa gilid ng mukha na tumatagilid na parang natutulog", "description_en": "Flat hand at side of face tilting like sleeping" },
+        { "sign_name": "Pumunta", "sign_name_en": "Go", "description": "Hintuturo na nakaturo pasulong at gumagalaw papalayo", "description_en": "Index finger pointing forward and moving away" },
+        { "sign_name": "Tigil", "sign_name_en": "Stop", "description": "Patag na kamay na nakataas ang palad na parang humihinto", "description_en": "Flat hand with palm facing forward like stopping" }
+      ]
+    }
+  ]
+}

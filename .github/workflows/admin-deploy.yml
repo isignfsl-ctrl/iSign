@@ -1,0 +1,55 @@
+name: Deploy Admin Panel
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'admin/**'
+      - 'packages/isign_shared/**'
+      - 'pubspec.yaml'
+      - 'pubspec.lock'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.4'
+          channel: 'stable'
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Firebase CLI
+        run: npm install -g firebase-tools
+
+      - name: Get dependencies (shared)
+        run: |
+          cd packages/isign_shared
+          flutter pub get
+
+      - name: Get dependencies (admin)
+        run: |
+          cd admin
+          flutter pub get
+
+      - name: Build Admin Web
+        run: |
+          cd admin
+          flutter build web --release
+
+      - name: Deploy to Firebase Hosting
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          projectId: isign-fsl
+          target: admin
+          entryPoint: admin/build/web

@@ -1,0 +1,6 @@
+name: isign_shared
+description: Shared models for iSign FSL app and admin panel.
+version: 0.1.0
+
+environment:
+  sdk: ^3.6.0
