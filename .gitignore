@@ -9,6 +9,7 @@ build/
 .idea/
 *.iml
 .vscode/
+.opencode/
 
 # Dependencies
 node_modules/
@@ -32,6 +33,14 @@ local.properties
 *.freezed.dart
 *.gr.dart
 
+# Kotlin/Gradle cache
+android/.kotlin/
+*.log
+
+# Python cache
+__pycache__/
+*.pyc
+
 # Temp scripts
 fix_category_admin.js
 fix_category_ids.js
@@ -40,3 +49,6 @@ FIX_CATEGORY_README.md
 # OS
 .DS_Store
 Thumbs.db
+
+# Misc docs
+hands.md
