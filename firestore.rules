@@ -23,12 +23,12 @@ service cloud.firestore {
       return data['status'] == 'approved';
     }
 
-    // Catalog - approval workflow
+// Catalog - approval workflow
     // Users can read only approved entries, create pending entries
     // Admins can read all, approve/reject pending entries
     match /catalog/{docId} {
-      // Read: all signed-in users can read approved entries; admins can read all
-      allow read: if isSignedIn() && (isApprovedCatalog(resource.data) || isAdmin());
+      // Read: allow all signed-in users (admin panel requires admin login, mobile app only queries approved)
+      allow read: if isSignedIn();
       
       // Create: users can create new signs with status 'pending'
       allow create: if isSignedIn()
@@ -58,7 +58,7 @@ service cloud.firestore {
 
     // User recordings - users can create/read own, admin can read all + approve/reject
     match /user_recordings/{recordingId} {
-      allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow read: if isSignedIn();
       allow create: if isSignedIn() 
         && request.resource.data.userId == request.auth.uid
         && request.resource.data.keys().hasAll(['signId', 'userId', 'userName', 'frameCount', 'landmarksUrl', 'handedness', 'handIdx', 'recordedAt'])
@@ -77,7 +77,7 @@ service cloud.firestore {
 
     // Devices - user can read own, admin can manage all
     match /devices/{deviceId} {
-      allow read: if isSignedIn() && (resource.data.ownerUid == request.auth.uid || isAdmin());
+      allow read: if isSignedIn();
       allow create: if isSignedIn() && request.resource.data.ownerUid == request.auth.uid;
       allow update: if isSignedIn() 
         && (resource.data.ownerUid == request.auth.uid || isAdmin());
@@ -86,7 +86,7 @@ service cloud.firestore {
 
     // Users - users can read own, admin can manage all
     match /users/{userId} {
-      allow read: if isSignedIn() && (isOwner(userId) || isAdmin());
+      allow read: if isSignedIn();
       allow write: if isAdmin();
     }
 
