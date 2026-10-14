@@ -1,6 +1,14 @@
 {
   "indexes": [
     {
+      "collectionGroup": "catalog",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "signName", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "recordings",
       "queryScope": "COLLECTION",
       "fields": [
