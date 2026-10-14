@@ -20,7 +20,7 @@ service cloud.firestore {
     }
     
     function isApprovedCatalog(data) {
-      return data.get('status') == 'approved';
+      return data['status'] == 'approved';
     }
 
     // Catalog - approval workflow
