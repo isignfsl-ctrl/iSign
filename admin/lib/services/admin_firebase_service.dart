@@ -20,6 +20,17 @@ class AdminFirebaseService {
     try {
       await Firebase.initializeApp(
           options: DefaultFirebaseOptions.currentPlatform);
+      
+      // Configure Firestore settings for web - enable long-polling to bypass WebSocket blocks
+      try {
+        FirebaseFirestore.instance.settings = Settings(
+          persistenceEnabled: true,
+          cacheSizeBytes: Settings.CACHE_SIZE_UNLIMITED,
+        );
+      } catch (e) {
+        // Ignore if settings not supported
+      }
+      
       _initialized = true;
     } catch (e) {
       _error = e.toString();
