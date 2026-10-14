@@ -156,6 +156,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         final existing = await fb.firestore
             .collection('catalog')
             .where('signName', isEqualTo: signName)
+            .where('status', isEqualTo: 'approved')
             .limit(1)
             .get();
 
