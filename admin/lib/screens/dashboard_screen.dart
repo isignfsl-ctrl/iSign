@@ -8,6 +8,7 @@ import '../theme/app_theme.dart';
 import 'dashboard_home_screen.dart';
 import 'recordings_screen.dart';
 import 'catalog_screen.dart';
+import 'pending_signs_screen.dart';
 import 'devices_screen.dart';
 import 'users_screen.dart';
 
@@ -25,11 +26,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
   String? _role;
   final _builtScreens = <int>{0};
   int _previousIndex = 0;
-  int _pendingCount = 0;
+  int _pendingSignsCount = 0;
+  int _pendingRecordingsCount = 0;
   bool _isOnline = html.window.navigator.onLine ?? true;
 
   static const _navItems = [
     (icon: Icons.dashboard_outlined, activeIcon: Icons.dashboard, label: 'Dashboard'),
+    (icon: Icons.pending_actions_outlined, activeIcon: Icons.pending_actions, label: 'Pending Signs'),
     (icon: Icons.quiz_outlined, activeIcon: Icons.quiz, label: 'Recordings'),
     (icon: Icons.book_outlined, activeIcon: Icons.book, label: 'Catalog'),
     (icon: Icons.phone_android_outlined, activeIcon: Icons.phone_android, label: 'Devices'),
@@ -37,16 +40,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
   ];
 
   static const _screenTitles = [
-    'Dashboard', 'Recordings', 'Catalog', 'Devices', 'Users',
+    'Dashboard', 'Pending Signs', 'Recordings', 'Catalog', 'Devices', 'Users',
   ];
 
   Widget _buildScreen(int index) {
     switch (index) {
       case 0: return const DashboardHomeScreen();
-      case 1: return const RecordingsScreen();
-      case 2: return const CatalogScreen();
-      case 3: return const DevicesScreen();
-      case 4: return const UsersScreen();
+      case 1: return const PendingSignsScreen();
+      case 2: return const RecordingsScreen();
+      case 3: return const CatalogScreen();
+      case 4: return const DevicesScreen();
+      case 5: return const UsersScreen();
       default: return const SizedBox.shrink();
     }
   }
@@ -66,8 +70,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   void _listenPending() {
+    // Listen for pending signs
+    _fb.firestore.collection('catalog').where('status', isEqualTo: 'pending').snapshots().listen((snap) {
+      if (mounted) setState(() => _pendingSignsCount = snap.docs.length);
+    });
+    // Listen for pending recordings
     _fb.firestore.collection('recordings').where('status', isEqualTo: 'pending').snapshots().listen((snap) {
-      if (mounted) setState(() => _pendingCount = snap.docs.length);
+      if (mounted) setState(() => _pendingRecordingsCount = snap.docs.length);
     });
   }
 
@@ -275,7 +284,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
               itemBuilder: (context, index) {
                 final item = _navItems[index];
                 final selected = _currentIndex == index;
-                final badge = index == 1 && _pendingCount > 0 ? _pendingCount : null;
+                int? badge;
+                if (index == 1) badge = _pendingSignsCount;
+                if (index == 2) badge = _pendingRecordingsCount;
                 return Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                   child: Material(
@@ -296,7 +307,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                 fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
                                 color: selected ? theme.colorScheme.primary : theme.colorScheme.onSurfaceVariant)),
                             ),
-                            if (badge != null)
+                            if (badge != null && badge > 0)
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                 decoration: BoxDecoration(
@@ -336,18 +347,26 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Widget _buildBreadcrumb(ThemeData theme) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(color: theme.colorScheme.surface, border: Border(bottom: BorderSide(color: theme.colorScheme.outlineVariant))),
       child: Row(children: [
         Icon(Icons.home_outlined, size: 14, color: theme.colorScheme.onSurfaceVariant),
         const SizedBox(width: 6),
         Text(_screenTitles[_currentIndex], style: theme.textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600)),
-        if (_currentIndex == 1 && _pendingCount > 0) ...[
+        if (_currentIndex == 1 && _pendingSignsCount > 0) ...[
           const SizedBox(width: 8),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
             decoration: BoxDecoration(color: AppColors.statusPending.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(8)),
-            child: Text('$_pendingCount pending', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.statusPending)),
+            child: Text('$_pendingSignsCount pending', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.statusPending)),
+          ),
+        ],
+        if (_currentIndex == 2 && _pendingRecordingsCount > 0) ...[
+          const SizedBox(width: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            decoration: BoxDecoration(color: AppColors.statusPending.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(8)),
+            child: Text('$_pendingRecordingsCount pending', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.statusPending)),
           ),
         ],
       ]),
@@ -359,12 +378,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
       appBar: AppBar(
         title: Row(children: [
           Text(_screenTitles[_currentIndex]),
-          if (_currentIndex == 1 && _pendingCount > 0) ...[
+          if (_currentIndex == 1 && _pendingSignsCount > 0) ...[
             const SizedBox(width: 8),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
               decoration: BoxDecoration(color: AppColors.statusPending.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(8)),
-              child: Text('$_pendingCount pending', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.statusPending)),
+              child: Text('$_pendingSignsCount pending', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.statusPending)),
+            ),
+          ],
+          if (_currentIndex == 2 && _pendingRecordingsCount > 0) ...[
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(color: AppColors.statusPending.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(8)),
+              child: Text('$_pendingRecordingsCount pending', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.statusPending)),
             ),
           ],
         ]),
@@ -409,12 +436,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
         onDestinationSelected: _navigateTo,
         animationDuration: const Duration(milliseconds: 300),
         destinations: _navItems.asMap().entries.map((entry) {
-          final badge = entry.key == 1 && _pendingCount > 0 ? _pendingCount : null;
+          int? badge;
+          if (entry.key == 1) badge = _pendingSignsCount;
+          if (entry.key == 2) badge = _pendingRecordingsCount;
           return NavigationDestination(
-            icon: badge != null
+            icon: badge != null && badge > 0
                 ? Badge(label: Text('$badge'), child: Icon(entry.value.icon))
                 : Icon(entry.value.icon),
-            selectedIcon: badge != null
+            selectedIcon: badge != null && badge > 0
                 ? Badge(label: Text('$badge'), child: Icon(entry.value.activeIcon))
                 : Icon(entry.value.activeIcon),
             label: entry.value.label,

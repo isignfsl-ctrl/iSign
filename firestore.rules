@@ -1,7 +1,7 @@
 rules_version = '2';
 
 // iSign FSL - Production security rules
-// Collections: catalog (admin-managed), user_recordings (user uploads + admin review), 
+// Collections: catalog (admin-managed with approval workflow), user_recordings (user uploads + admin review), 
 // reference_landmarks (admin-curated), devices, users (admin)
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -18,11 +18,42 @@ service cloud.firestore {
     function isOwner(userId) {
       return isSignedIn() && request.auth.uid == userId;
     }
+    
+    function isApprovedCatalog(data) {
+      return data.get('status') == 'approved';
+    }
 
-    // Catalog - admin manages, all signed-in users can read
+    // Catalog - approval workflow
+    // Users can read only approved entries, create pending entries
+    // Admins can read all, approve/reject pending entries
     match /catalog/{docId} {
-      allow read: if isSignedIn();
-      allow write: if isAdmin();
+      // Read: all signed-in users can read approved entries; admins can read all
+      allow read: if isSignedIn() && (isApprovedCatalog(resource.data) || isAdmin());
+      
+      // Create: users can create new signs with status 'pending'
+      allow create: if isSignedIn()
+        && request.resource.data.keys().hasAll(['signId', 'signName', 'categoryId'])
+        && request.resource.data.status == 'pending'
+        && request.resource.data.proposedBy == request.auth.uid
+        && request.resource.data.proposedAt != null;
+      
+      // Update: 
+      // - Users can only update their own pending entries (before approval)
+      // - Admins can approve/reject (change status) and update any field
+      allow update: if isSignedIn()
+        && (
+          // User updating their own pending entry (before admin review)
+          (resource.data.proposedBy == request.auth.uid && resource.data.status == 'pending')
+          ||
+          // Admin can approve/reject or fully update
+          (isAdmin() && (
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'approvedAt', 'approvedBy', 'approvedSampleCount', 'landmarkSamplePaths', 'version'])
+            || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['signName', 'description', 'english_name', 'english_description', 'categoryId', 'version'])
+          ))
+        );
+      
+      // Delete: only admins
+      allow delete: if isAdmin();
     }
 
     // User recordings - users can create/read own, admin can read all + approve/reject

@@ -19,6 +19,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
   final _auth = AdminAuthService();
   final _searchCtl = TextEditingController();
   String _searchQuery = '';
+  String _statusFilter = 'all'; // all, approved, pending, rejected
   Timer? _debounce;
   bool _sortAscending = true;
   int _sortColumnIndex = 0;
@@ -130,6 +131,10 @@ class _CatalogScreenState extends State<CatalogScreen> {
         'version': (existing?.version ?? 0) + 1,
         'landmarkSamplePaths': existing?.landmarkSamplePaths ?? [],
         'updatedAt': DateTime.now().toIso8601String(), 'updatedBy': user?.email ?? 'admin',
+        'status': 'approved', // Admin-created signs are auto-approved
+        'approvedAt': DateTime.now().toIso8601String(),
+        'approvedBy': user?.email ?? 'admin',
+        'approvedSampleCount': 0,
       };
 
       if (existing != null) {
@@ -195,6 +200,24 @@ class _CatalogScreenState extends State<CatalogScreen> {
               ),
             ),
           ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+            child: DropdownButtonFormField<String>(
+              value: _statusFilter,
+              decoration: const InputDecoration(
+                labelText: 'Status Filter',
+                isDense: true,
+                contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              ),
+              items: const [
+                DropdownMenuItem(value: 'all', child: Text('All Statuses')),
+                DropdownMenuItem(value: 'approved', child: Text('Approved')),
+                DropdownMenuItem(value: 'pending', child: Text('Pending Review')),
+                DropdownMenuItem(value: 'rejected', child: Text('Rejected')),
+              ],
+              onChanged: (v) => setState(() => _statusFilter = v ?? 'all'),
+            ),
+          ),
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
               stream: _fb.firestore.collection('catalog').orderBy('signId').snapshots(),
@@ -208,6 +231,13 @@ class _CatalogScreenState extends State<CatalogScreen> {
                 }
 
                 var docs = snapshot.data!.docs;
+                if (_statusFilter != 'all') {
+                  docs = docs.where((d) {
+                    final data = d.data() as Map<String, dynamic>;
+                    final status = data['status'] as String? ?? 'pending';
+                    return status == _statusFilter;
+                  }).toList();
+                }
                 if (_searchQuery.isNotEmpty) {
                   docs = docs.where((d) {
                     final data = d.data() as Map<String, dynamic>;
@@ -251,7 +281,25 @@ class _CatalogScreenState extends State<CatalogScreen> {
                         final isEven = entry.key.isEven;
                         final approvedCount = (data['approvedSampleCount'] as int? ?? 0);
                         final totalSamplePaths = (data['landmarkSamplePaths'] as List<dynamic>?)?.length ?? 0;
+                        final status = data['status'] as String? ?? 'pending';
                         final isTrained = approvedCount >= 5;
+                        Color statusColor;
+                        String statusLabel;
+                        switch (status) {
+                          case 'approved':
+                            statusColor = Colors.green;
+                            statusLabel = 'Approved';
+                            break;
+                          case 'rejected':
+                            statusColor = Colors.red;
+                            statusLabel = 'Rejected';
+                            break;
+                          case 'pending':
+                          default:
+                            statusColor = Colors.orange;
+                            statusLabel = 'Pending';
+                            break;
+                        }
                         return DataRow(
                           color: isEven ? WidgetStateProperty.all(theme.colorScheme.surfaceContainerLow.withValues(alpha: 0.3)) : null,
                           cells: [
@@ -266,15 +314,15 @@ class _CatalogScreenState extends State<CatalogScreen> {
                             DataCell(Container(
                               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                               decoration: BoxDecoration(
-                                color: isTrained ? Colors.green.withValues(alpha: 0.15) : Colors.orange.withValues(alpha: 0.15),
+                                color: statusColor.withValues(alpha: 0.15),
                                 borderRadius: BorderRadius.circular(8),
                               ),
                               child: Text(
-                                isTrained ? 'Trained' : 'Pending',
+                                statusLabel,
                                 style: TextStyle(
                                   fontSize: 11,
                                   fontWeight: FontWeight.w600,
-                                  color: isTrained ? Colors.green.shade700 : Colors.orange.shade700,
+                                  color: statusColor.withValues(alpha: 0.9),
                                 ),
                               ),
                             )),
@@ -298,7 +346,27 @@ class _CatalogScreenState extends State<CatalogScreen> {
                     final entry = SignCatalogEntry.fromFirestore(data);
                     final approvedCount = (data['approvedSampleCount'] as int? ?? 0);
                     final totalPaths = (data['landmarkSamplePaths'] as List<dynamic>?)?.length ?? 0;
+                    final status = data['status'] as String? ?? 'pending';
                     final isTrained = approvedCount >= 5;
+                    Color statusColor;
+                    String statusLabel;
+                    switch (status) {
+                      case 'approved':
+                        statusColor = Colors.green;
+                        statusLabel = 'Approved';
+                        break;
+                      case 'rejected':
+                        statusColor = Colors.red;
+                        statusLabel = 'Rejected';
+                        break;
+                      case 'pending':
+                      default:
+                        statusColor = Colors.orange;
+                        statusLabel = 'Pending';
+                        break;
+                    }
+                    // Use statusColor.withValues(alpha: 0.9) instead of shade700
+                    final textColor = statusColor.withValues(alpha: 0.9);
                     return Card(
                       margin: const EdgeInsets.only(bottom: 8),
                       child: ListTile(
@@ -314,15 +382,15 @@ class _CatalogScreenState extends State<CatalogScreen> {
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
                                 decoration: BoxDecoration(
-                                  color: isTrained ? Colors.green.withValues(alpha: 0.15) : Colors.orange.withValues(alpha: 0.15),
+                                  color: statusColor.withValues(alpha: 0.15),
                                   borderRadius: BorderRadius.circular(8),
                                 ),
                                 child: Text(
-                                  isTrained ? 'Trained' : 'Pending',
+                                  statusLabel,
                                   style: TextStyle(
                                     fontSize: 10,
                                     fontWeight: FontWeight.w600,
-                                    color: isTrained ? Colors.green.shade700 : Colors.orange.shade700,
+                                    color: textColor,
                                   ),
                                 ),
                               ),
