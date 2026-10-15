@@ -1,0 +1,58 @@
+<resources>
+    <string name="app_name">iSigns</string>
+
+    <!-- Navigation -->
+    <string name="tab_signs">Signs</string>
+    <string name="tab_translate">Translate</string>
+
+    <!-- Categories -->
+    <string name="category_greetings">Greetings</string>
+    <string name="category_numbers">Numbers</string>
+    <string name="category_questions">Questions</string>
+    <string name="category_actions">Actions</string>
+    <string name="category_feelings">Feelings</string>
+
+    <!-- Signs Screen -->
+    <string name="category_filter_all">All</string>
+    <string name="clear_category">Clear</string>
+    <string name="category_label">Category: %s</string>
+
+    <!-- Sign Detail -->
+    <string name="watch_video">Watch Video</string>
+    <string name="handshape">Handshape</string>
+    <string name="movement">Movement</string>
+    <string name="back">Back</string>
+    <string name="close_video">Close video</string>
+    <string name="play">Play</string>
+    <string name="pause">Pause</string>
+    <string name="mute">Mute</string>
+    <string name="unmute">Unmute</string>
+
+    <!-- Translate Screen -->
+    <string name="translate_title">Translate Words to Signs</string>
+    <string name="search_hint">Search signs...</string>
+    <string name="search_placeholder">Type Filipino/English word</string>
+    <string name="search_clear">Clear</string>
+    <string name="no_results_title">No signs found</string>
+    <string name="no_results_message">Try different keywords or check spelling</string>
+    <string name="empty_state_title">Translate Words to Signs</string>
+    <string name="empty_state_message">Type a Filipino or English word to find matching signs</string>
+    <string name="search_suggestions">Try: "kamusta", "thank you", "one", "who", "eat", "happy"</string>
+    <string name="results_found" formatted="false">%d sign%s found</string>
+    <string name="no_signs_found">No signs found for "%s"</string>
+
+    <!-- Favorites -->
+    <string name="add_to_favorites">Add to favorites</string>
+    <string name="remove_from_favorites">Remove from favorites</string>
+
+    <!-- Progress -->
+    <string name="progress_viewed">Viewed</string>
+    <string name="progress_mastered">Mastered</string>
+    <string name="progress_favorites">Favorites</string>
+
+    <!-- Accessibility -->
+    <string name="favorite_sign">Favorite sign</string>
+    <string name="unfavorite_sign">Unfavorite sign</string>
+    <string name="play_video">Play video for %s</string>
+    <string name="close_video_desc">Close video</string>
+</resources>

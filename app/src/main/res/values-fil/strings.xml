@@ -1,0 +1,58 @@
+<resources>
+    <string name="app_name">iSigns</string>
+
+    <!-- Navigation -->
+    <string name="tab_signs">Mga Senyas</string>
+    <string name="tab_translate">Isalin</string>
+
+    <!-- Categories -->
+    <string name="category_greetings">Mga Bati</string>
+    <string name="category_numbers">Mga Numero</string>
+    <string name="category_questions">Mga Tanong</string>
+    <string name="category_actions">Mga Kilos</string>
+    <string name="category_feelings">Mga Damdamin</string>
+
+    <!-- Signs Screen -->
+    <string name="category_filter_all">Lahat</string>
+    <string name="clear_category">Lisin</string>
+    <string name="category_label">Kategorya: %s</string>
+
+    <!-- Sign Detail -->
+    <string name="watch_video">Panoorin ang Video</string>
+    <string name="handshape">Anyo ng Kamay</string>
+    <string name="movement">Kilos</string>
+    <string name="back">Balik</string>
+    <string name="close_video">Isara ang Video</string>
+    <string name="play">Play</string>
+    <string name="pause">Pause</string>
+    <string name="mute">Mute</string>
+    <string name="unmute">Unmute</string>
+
+    <!-- Translate Screen -->
+    <string name="translate_title">Isalin ang mga Salita sa Senyas</string>
+    <string name="search_hint">Hanapin ang mga senyas...</string>
+    <string name="search_placeholder">Mag-type ng salitang Filipino/English</string>
+    <string name="search_clear">Lisin</string>
+    <string name="no_results_title">Walang natagpuang senyas</string>
+    <string name="no_results_message">Subukang ibang keyword o suriin ang spelling</string>
+    <string name="empty_state_title">Isalin ang mga Salita sa Senyas</string>
+    <string name="empty_state_message">Mag-type ng salitang Filipino o English para hanapin ang katumbas na senyas</string>
+    <string name="search_suggestions">Subukan: "kamusta", "salamat", "isa", "sino", "kain", "masaya"</string>
+    <string name="results_found" formatted="false">%d senyas ang natagpuan</string>
+    <string name="no_signs_found">Walang senyas para sa "%s"</string>
+
+    <!-- Favorites -->
+    <string name="add_to_favorites">Idagdag sa paborito</string>
+    <string name="remove_from_favorites">Alisin sa paborito</string>
+
+    <!-- Progress -->
+    <string name="progress_viewed">Napanood</string>
+    <string name="progress_mastered">Nabisa</string>
+    <string name="progress_favorites">Mga Paborito</string>
+
+    <!-- Accessibility -->
+    <string name="favorite_sign">Paboritong senyas</string>
+    <string name="unfavorite_sign">Alisin sa paborito</string>
+    <string name="play_video">I-play ang video para sa %s</string>
+    <string name="close_video_desc">Isara ang video</string>
+</resources>
