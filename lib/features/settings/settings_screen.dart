@@ -144,7 +144,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
       setState(() => _syncStatus = 'Step 2/4: Uploading sign catalog...');
       final signs = await db.query('fsl_signs');
       int uploaded = 0;
-      final currentUser = fb.auth.currentUser;
       for (final sign in signs) {
         final signId = sign['id'] as int;
         final signName = sign['sign_name'] as String;
@@ -156,12 +155,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
         final existing = await fb.firestore
             .collection('catalog')
             .where('signName', isEqualTo: signName)
-            .where('status', isEqualTo: 'approved')
             .limit(1)
             .get();
 
-        // Base data for catalog entry
-        final baseData = <String, dynamic>{
+        final data = <String, dynamic>{
           'signId': signId,
           'signName': signName,
           'description': description,
@@ -175,46 +172,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
         };
 
         if (existing.docs.isNotEmpty) {
-          // Update existing entry - preserve status if already approved/rejected
-          final existingData = existing.docs.first.data();
-          final existingStatus = existingData['status'] as String? ?? 'pending';
-          
-          // Only update if status is still pending (user's own pending entry)
-          // Don't overwrite approved/rejected entries from admin
-          if (existingStatus == 'pending' && existingData['proposedBy'] == currentUser?.uid) {
-            final updateData = <String, dynamic>{
-              ...baseData,
-              'status': 'pending',
-              'proposedBy': currentUser?.uid,
-              'proposedAt': DateTime.now().toIso8601String(),
-            };
-            await fb.firestore
-                .collection('catalog')
-                .doc(existing.docs.first.id)
-                .update(updateData);
-          }
-          // If status is approved/rejected, don't overwrite (admin decision stands)
+          await fb.firestore
+              .collection('catalog')
+              .doc(existing.docs.first.id)
+              .update(data);
         } else {
-          // New sign - create as pending for admin review
-          final newData = <String, dynamic>{
-            ...baseData,
-            'status': 'pending',
-            'proposedBy': currentUser?.uid,
-            'proposedAt': DateTime.now().toIso8601String(),
-            'approvedSampleCount': 0,
-          };
-          await fb.firestore.collection('catalog').add(newData);
+          await fb.firestore.collection('catalog').add(data);
         }
         uploaded++;
       }
 
-      // Step 3: Pull cloud catalog to local (only APPROVED signs for recognition)
+      // Step 3: Pull cloud catalog to local
       setState(() => _syncStatus = 'Step 3/4: Downloading sign catalog...');
-      // Only fetch approved signs for mobile recognition
-      final snapshot = await fb.firestore
-          .collection('catalog')
-          .where('status', isEqualTo: 'approved')
-          .get();
+      final snapshot = await fb.firestore.collection('catalog').get();
       int added = 0, updated = 0;
 
       // Preload local categories for mapping cloud categoryIds

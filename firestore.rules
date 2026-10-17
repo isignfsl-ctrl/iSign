@@ -1,7 +1,7 @@
 rules_version = '2';
 
 // iSign FSL - Production security rules
-// Collections: catalog (admin-managed with approval workflow), user_recordings (user uploads + admin review), 
+// Collections: catalog (admin-managed), user_recordings (user uploads + admin review), 
 // reference_landmarks (admin-curated), devices, users (admin)
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -12,53 +12,22 @@ service cloud.firestore {
     }
     
     function isAdmin() {
-      return isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      return isSignedIn() && get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.role == 'admin';
     }
     
     function isOwner(userId) {
       return isSignedIn() && request.auth.uid == userId;
     }
-    
-    function isApprovedCatalog(data) {
-      return data['status'] == 'approved';
-    }
 
-// Catalog - approval workflow
-    // Users can read only approved entries, create pending entries
-    // Admins can read all, approve/reject pending entries
+    // Catalog - admin manages, all signed-in users can read
     match /catalog/{docId} {
-      // Read: allow all signed-in users (admin panel requires admin login, mobile app only queries approved)
       allow read: if isSignedIn();
-      
-      // Create: users can create new signs with status 'pending'
-      allow create: if isSignedIn()
-        && request.resource.data.keys().hasAll(['signId', 'signName', 'categoryId'])
-        && request.resource.data.status == 'pending'
-        && request.resource.data.proposedBy == request.auth.uid
-        && request.resource.data.proposedAt != null;
-      
-      // Update: 
-      // - Users can only update their own pending entries (before approval)
-      // - Admins can approve/reject (change status) and update any field
-      allow update: if isSignedIn()
-        && (
-          // User updating their own pending entry (before admin review)
-          (resource.data.proposedBy == request.auth.uid && resource.data.status == 'pending')
-          ||
-          // Admin can approve/reject or fully update
-          (isAdmin() && (
-            request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'approvedAt', 'approvedBy', 'approvedSampleCount', 'landmarkSamplePaths', 'version'])
-            || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['signName', 'description', 'english_name', 'english_description', 'categoryId', 'version'])
-          ))
-        );
-      
-      // Delete: only admins
-      allow delete: if isAdmin();
+      allow write: if isAdmin();
     }
 
     // User recordings - users can create/read own, admin can read all + approve/reject
     match /user_recordings/{recordingId} {
-      allow read: if isSignedIn();
+      allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
       allow create: if isSignedIn() 
         && request.resource.data.userId == request.auth.uid
         && request.resource.data.keys().hasAll(['signId', 'userId', 'userName', 'frameCount', 'landmarksUrl', 'handedness', 'handIdx', 'recordedAt'])
@@ -77,7 +46,7 @@ service cloud.firestore {
 
     // Devices - user can read own, admin can manage all
     match /devices/{deviceId} {
-      allow read: if isSignedIn();
+      allow read: if isSignedIn() && (resource.data.ownerUid == request.auth.uid || isAdmin());
       allow create: if isSignedIn() && request.resource.data.ownerUid == request.auth.uid;
       allow update: if isSignedIn() 
         && (resource.data.ownerUid == request.auth.uid || isAdmin());
@@ -86,7 +55,7 @@ service cloud.firestore {
 
     // Users - users can read own, admin can manage all
     match /users/{userId} {
-      allow read: if isSignedIn();
+      allow read: if isSignedIn() && (isOwner(userId) || isAdmin());
       allow write: if isAdmin();
     }
 
