@@ -52,3 +52,5 @@ Thumbs.db
 
 # Misc docs
 hands.md
+# GitHub workflows (require workflow scope to push)
+.github/workflows/
