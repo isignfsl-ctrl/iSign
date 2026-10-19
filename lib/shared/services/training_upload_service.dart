@@ -105,19 +105,23 @@ class TrainingUploadService {
       await uploadTask;
       final downloadUrl = await ref.getDownloadURL();
 
-      // 2. Create Firestore document
-      await _firestore.collection('user_recordings').add({
+      // 2. Create Firestore document (unified 'recordings' collection)
+      await _firestore.collection('recordings').add({
+        'deviceId': user.uid,
         'signId': sample.signId,
-        'userId': user.uid,
-        'userName': sample.userName ?? 'Anonymous',
-        'frameCount': sample.landmarks.length ~/ 63, // 21 landmarks * 3 coords
-        'landmarksUrl': downloadUrl,
+        'signName': sample.userName ?? 'Unknown',
+        'landmarksPath': downloadUrl,
         'handedness': sample.handedness,
         'handIdx': sample.handIdx,
-        'recordedAt': sample.recordedAt?.toIso8601String() ?? DateTime.now().toIso8601String(),
-        'uploadedAt': FieldValue.serverTimestamp(),
+        'frameCount': sample.landmarks.length ~/ 63,
+        'durationMs': (sample.recordedAt != null
+            ? DateTime.now().difference(sample.recordedAt!).inMilliseconds
+            : 0),
         'status': 'pending',
-        'autoDeleteAt': null,
+        'submittedAt': sample.recordedAt?.toIso8601String()
+            ?? DateTime.now().toIso8601String(),
+        'quality_motionScore': 0.0,
+        'quality_shapeConsistency': 1.0,
       });
 
       return true;
@@ -127,10 +131,36 @@ class TrainingUploadService {
     }
   }
 
+  /// Mark samples as synced by signId + recordedAt
+  Future<void> markSamplesSynced(List<TrainingSample> samples) async {
+    if (samples.isEmpty) return;
+    final db = await DbHelper().database;
+    final batch = db.batch();
+    for (final sample in samples) {
+      final maps = await db.query(
+        'training_samples',
+        where: 'sign_id = ? AND recorded_at = ?',
+        whereArgs: [
+          sample.signId,
+          sample.recordedAt?.toIso8601String() ?? '',
+        ],
+        limit: 1,
+      );
+      if (maps.isNotEmpty) {
+        batch.update(
+          'training_samples',
+          {'synced': 1},
+          where: 'id = ?',
+          whereArgs: [maps.first['id'] as int],
+        );
+      }
+    }
+    await batch.commit(noResult: true);
+  }
+
   /// Process pending uploads in batches
   Future<void> _processPendingUploads() async {
-    int processed = 0;
-    int failed = 0;
+    final successfulSamples = <TrainingSample>[];
 
     while (true) {
       final samples = await getUnsyncedSamples(limit: 10);
@@ -144,30 +174,27 @@ class TrainingUploadService {
           success = await _uploadSample(sample);
           if (!success) {
             retries++;
-            await Future.delayed(Duration(seconds: 2 * retries)); // Exponential backoff
+            await Future.delayed(Duration(seconds: 2 * retries));
           }
         }
 
         if (success) {
-          // Note: We need the database ID, but TrainingSample doesn't have it from the model
-          // We'll need to query by signId and landmarks to find the ID
-          // For now, we'll skip marking as synced and rely on the server-side deduplication
-          // TODO: Implement proper sync marking
-        } else {
-          // failed++;
+          successfulSamples.add(sample);
         }
       }
 
-      // Small delay between batches
       await Future.delayed(const Duration(milliseconds: 500));
     }
+
+    // Mark successfully uploaded samples as synced
+    await markSamplesSynced(successfulSamples);
 
     // Update last sync timestamp
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('last_sync_timestamp', DateTime.now().toIso8601String());
     await prefs.setInt('pending_sync_count', await getPendingCount());
 
-    print('Sync complete: $processed uploaded, $failed failed');
+    print('Sync complete: ${successfulSamples.length} uploaded');
   }
 
   /// Manually trigger sync (called after recording)

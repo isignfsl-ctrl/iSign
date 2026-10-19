@@ -70,7 +70,7 @@ class _PendingSignsScreenState extends State<PendingSignsScreen> {
     } else {
       final batch = _fb.firestore.batch();
       for (final id in _selectedIds) {
-        batch.update(_fb.firestore.collection('catalog').doc(id), {
+        batch.update(_fb.firestore.collection('recordings').doc(id), {
           'status': 'rejected',
           'reviewedAt': DateTime.now().toIso8601String(),
           'reviewedBy': 'admin',
@@ -88,56 +88,48 @@ class _PendingSignsScreenState extends State<PendingSignsScreen> {
   }
 
   Future<void> _onApprove(String docId) async {
-    final doc = await _fb.firestore.collection('catalog').doc(docId).get();
+    final doc = await _fb.firestore.collection('recordings').doc(docId).get();
     final data = doc.data();
     if (data == null) return;
     final signId = data['signId'] as int?;
-    final landmarksPath = data['landmarkSamplePaths'] as List<dynamic>?;
+    final landmarksPath = data['landmarksPath'] as String?;
 
-    // Update catalog entry status
-    await _fb.firestore.collection('catalog').doc(docId).update({
+    // Update recording status
+    await _fb.firestore.collection('recordings').doc(docId).update({
       'status': 'approved',
       'approvedAt': DateTime.now().toIso8601String(),
       'approvedBy': 'admin',
     });
 
-    // Update device trust if proposedBy is a user
+    // Update device trust
     try {
-      final proposedBy = data['proposedBy'] as String?;
-      if (proposedBy != null) {
-        // Find device by ownerUid
-        final deviceSnapshot = await _fb.firestore
-            .collection('devices')
-            .where('ownerUid', isEqualTo: proposedBy)
-            .limit(1)
-            .get();
-        if (deviceSnapshot.docs.isNotEmpty) {
-          await _fb.firestore.collection('devices').doc(deviceSnapshot.docs.first.id).update({
-            'trust_approvedCount': FieldValue.increment(1),
-            'lastReview': DateTime.now().toIso8601String(),
-          });
-        }
+      final deviceId = data['deviceId'] as String?;
+      if (deviceId != null) {
+        await _fb.firestore.collection('devices').doc(deviceId).update({
+          'trust_approvedCount': FieldValue.increment(1),
+          'lastReview': DateTime.now().toIso8601String(),
+        });
       }
     } catch (_) {}
   }
 
   Future<void> _onReject(String docId) async {
-    await _fb.firestore.collection('catalog').doc(docId).update({
+    await _fb.firestore.collection('recordings').doc(docId).update({
       'status': 'rejected',
       'reviewedAt': DateTime.now().toIso8601String(),
       'reviewedBy': 'admin',
     });
 
-    // Update device trust if proposedBy is a user
+    // Update device trust
     try {
-      final doc = await _fb.firestore.collection('catalog').doc(docId).get();
+      final doc = await _fb.firestore.collection('recordings').doc(docId).get();
       final data = doc.data();
       if (data == null) return;
-      final proposedBy = data['proposedBy'] as String?;
-      if (proposedBy != null) {
+      final deviceId = data['deviceId'] as String?;
+      if (deviceId != null) {
         final deviceSnapshot = await _fb.firestore
             .collection('devices')
-            .where('ownerUid', isEqualTo: proposedBy)
+            .where('deviceId', isEqualTo: deviceId)
             .limit(1)
             .get();
         if (deviceSnapshot.docs.isNotEmpty) {
@@ -220,9 +212,9 @@ class _PendingSignsScreenState extends State<PendingSignsScreen> {
       ),
       body: StreamBuilder<QuerySnapshot>(
         stream: _fb.firestore
-            .collection('catalog')
+            .collection('recordings')
             .where('status', isEqualTo: 'pending')
-            .orderBy('proposedAt', descending: true)
+            .orderBy('submittedAt', descending: true)
             .snapshots(),
         builder: (context, snapshot) {
           if (snapshot.hasError) {
@@ -240,10 +232,11 @@ class _PendingSignsScreenState extends State<PendingSignsScreen> {
           final filteredDocs = allDocs.where((doc) {
             final data = doc.data() as Map<String, dynamic>;
             final signName = (data['signName'] as String? ?? '').toLowerCase();
-            final categoryId = data['categoryId'] as int? ?? -1;
-            final categoryMatch = _categoryFilter == 'all' || categoryId.toString() == _categoryFilter;
-            final searchMatch = _searchQuery.isEmpty || signName.contains(_searchQuery);
-            return categoryMatch && searchMatch;
+            final deviceId = (data['deviceId'] as String? ?? '').toLowerCase();
+            final searchMatch = _searchQuery.isEmpty ||
+                signName.contains(_searchQuery) ||
+                deviceId.contains(_searchQuery);
+            return searchMatch;
           }).toList();
 
           if (filteredDocs.isEmpty) {
@@ -262,9 +255,9 @@ class _PendingSignsScreenState extends State<PendingSignsScreen> {
                 final doc = filteredDocs[index];
                 final data = doc.data() as Map<String, dynamic>;
                 final signName = data['signName'] as String? ?? 'Unknown';
-                final categoryId = data['categoryId'] as int? ?? -1;
-                final proposedAt = data['proposedAt'] as String?;
-                final proposedBy = data['proposedBy'] as String?;
+                final deviceId = data['deviceId'] as String? ?? 'Unknown';
+                final submittedAt = data['submittedAt'] as String?;
+                final signId = data['signId'] as int?;
                 final isSelected = _selectedIds.contains(doc.id);
 
                 return Card(
@@ -276,11 +269,10 @@ class _PendingSignsScreenState extends State<PendingSignsScreen> {
                     subtitle: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Category: ${_categoryName(categoryId)}'),
-                        if (proposedAt != null)
-                          Text('Proposed: ${DateTime.parse(proposedAt).toLocal().toString().substring(0, 16)}'),
-                        if (proposedBy != null)
-                          Text('By: $proposedBy'),
+                        Text('Device: $deviceId'),
+                        if (signId != null) Text('Sign ID: $signId'),
+                        if (submittedAt != null)
+                          Text('Submitted: ${DateTime.parse(submittedAt).toLocal().toString().substring(0, 16)}'),
                       ],
                     ),
                     secondary: const Icon(Icons.pending),
@@ -297,10 +289,9 @@ class _PendingSignsScreenState extends State<PendingSignsScreen> {
               final doc = filteredDocs[index];
               final data = doc.data() as Map<String, dynamic>;
               final signName = data['signName'] as String? ?? 'Unknown';
-              final description = data['description'] as String? ?? '';
-              final categoryId = data['categoryId'] as int? ?? -1;
-              final proposedAt = data['proposedAt'] as String?;
-              final proposedBy = data['proposedBy'] as String?;
+              final deviceId = data['deviceId'] as String? ?? 'Unknown';
+              final submittedAt = data['submittedAt'] as String?;
+              final signId = data['signId'] as int?;
 
               return Card(
                 margin: const EdgeInsets.only(bottom: 12),
@@ -329,43 +320,32 @@ class _PendingSignsScreenState extends State<PendingSignsScreen> {
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),
-                              if (description.isNotEmpty) ...[
-                                const SizedBox(height: 4),
-                                Text(
-                                  description,
-                                  style: theme.textTheme.bodySmall?.copyWith(
-                                    color: theme.colorScheme.onSurfaceVariant,
-                                  ),
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ],
                               const SizedBox(height: 8),
                               Row(
                                 children: [
                                   const StatusBadge('pending'),
                                   const SizedBox(width: 12),
                                   Text(
-                                    _categoryName(categoryId),
+                                    'Device: $deviceId',
                                     style: theme.textTheme.labelSmall?.copyWith(
                                       color: theme.colorScheme.onSurfaceVariant,
                                     ),
                                   ),
                                 ],
                               ),
-                              if (proposedAt != null) ...[
+                              if (signId != null) ...[
                                 const SizedBox(height: 4),
                                 Text(
-                                  'Proposed: ${DateTime.parse(proposedAt).toLocal().toString().substring(0, 16)}',
+                                  'Sign ID: $signId',
                                   style: theme.textTheme.labelSmall?.copyWith(
                                     color: theme.colorScheme.onSurfaceVariant,
                                   ),
                                 ),
                               ],
-                              if (proposedBy != null) ...[
+                              if (submittedAt != null) ...[
                                 const SizedBox(height: 4),
                                 Text(
-                                  'By: $proposedBy',
+                                  'Submitted: ${DateTime.parse(submittedAt).toLocal().toString().substring(0, 16)}',
                                   style: theme.textTheme.labelSmall?.copyWith(
                                     color: theme.colorScheme.onSurfaceVariant,
                                   ),
@@ -451,13 +431,12 @@ class _PendingSignsScreenState extends State<PendingSignsScreen> {
 
   void _showDetailsDialog(String docId, Map<String, dynamic> data) {
     final signName = data['signName'] as String? ?? 'Unknown';
-    final description = data['description'] as String? ?? '';
-    final englishName = data['english_name'] as String?;
-    final englishDescription = data['english_description'] as String?;
-    final categoryId = data['categoryId'] as int? ?? -1;
+    final deviceId = data['deviceId'] as String? ?? 'Unknown';
+    final submittedAt = data['submittedAt'] as String?;
     final signId = data['signId'] as int?;
-    final proposedAt = data['proposedAt'] as String?;
-    final proposedBy = data['proposedBy'] as String?;
+    final handedness = data['handedness'] as String? ?? 'unknown';
+    final frameCount = data['frameCount'] as int? ?? 0;
+    final durationMs = data['durationMs'] as int? ?? 0;
 
     showDialog(
       context: context,
@@ -468,31 +447,18 @@ class _PendingSignsScreenState extends State<PendingSignsScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              if (description.isNotEmpty) ...[
-                Text('Description: $description', style: Theme.of(ctx).textTheme.bodyMedium),
-                const SizedBox(height: 8),
-              ],
-              if (englishName != null && englishName.isNotEmpty) ...[
-                Text('English Name: $englishName', style: Theme.of(ctx).textTheme.bodyMedium),
-                const SizedBox(height: 8),
-              ],
-              if (englishDescription != null && englishDescription.isNotEmpty) ...[
-                Text('English Description: $englishDescription', style: Theme.of(ctx).textTheme.bodyMedium),
-                const SizedBox(height: 8),
-              ],
-              Text('Category: ${_categoryName(categoryId)}', style: Theme.of(ctx).textTheme.bodyMedium),
-              if (signId != null) ...[
-                const SizedBox(height: 4),
-                Text('Sign ID: $signId', style: Theme.of(ctx).textTheme.bodyMedium),
-              ],
-              if (proposedAt != null) ...[
-                const SizedBox(height: 4),
-                Text('Proposed: ${DateTime.parse(proposedAt).toLocal().toString().substring(0, 16)}', style: Theme.of(ctx).textTheme.bodyMedium),
-              ],
-              if (proposedBy != null) ...[
-                const SizedBox(height: 4),
-                Text('Proposed By: $proposedBy', style: Theme.of(ctx).textTheme.bodyMedium),
-              ],
+              Text('Device: $deviceId', style: Theme.of(ctx).textTheme.bodyMedium),
+              const SizedBox(height: 8),
+              Text('Sign ID: $signId', style: Theme.of(ctx).textTheme.bodyMedium),
+              const SizedBox(height: 8),
+              Text('Handedness: $handedness', style: Theme.of(ctx).textTheme.bodyMedium),
+              const SizedBox(height: 8),
+              Text('Frames: $frameCount', style: Theme.of(ctx).textTheme.bodyMedium),
+              const SizedBox(height: 8),
+              Text('Duration: ${durationMs}ms', style: Theme.of(ctx).textTheme.bodyMedium),
+              const SizedBox(height: 8),
+              if (submittedAt != null)
+                Text('Submitted: ${DateTime.parse(submittedAt).toLocal().toString().substring(0, 16)}', style: Theme.of(ctx).textTheme.bodyMedium),
             ],
           ),
         ),
