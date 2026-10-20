@@ -31,7 +31,7 @@ dependencies:
   cloud_firestore: ^5.4.0
   firebase_storage: ^12.1.0
   connectivity_plus: any
-  workmanager: ^0.5.2
+  workmanager: ^0.10.10
   shared_preferences: ^2.2.2
   isign_shared:
     path: packages/isign_shared

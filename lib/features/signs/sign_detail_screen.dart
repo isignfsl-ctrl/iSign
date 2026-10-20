@@ -68,7 +68,8 @@ class _SignDetailScreenState extends State<SignDetailScreen> {
       setState(() {
         _sampleCount = sampleCount;
         _refCount = refCount;
-        _isTrained = status == 'trained' || refCount >= TrainingRepository.minSamplesForTrained;
+        _isTrained = status == 'trained' ||
+            refCount >= TrainingRepository.minSamplesForTrained;
       });
     }
   }
@@ -77,7 +78,8 @@ class _SignDetailScreenState extends State<SignDetailScreen> {
     final db = await DbHelper().database;
     final maps = await db.query('categories');
     if (mounted) {
-      setState(() => _categories = maps.map((m) => CategoryModel.fromMap(m)).toList());
+      setState(() =>
+          _categories = maps.map((m) => CategoryModel.fromMap(m)).toList());
     }
   }
 
@@ -217,9 +219,7 @@ class _SignDetailScreenState extends State<SignDetailScreen> {
               ),
               alignment: Alignment.center,
               child: Text(
-                displayName.isNotEmpty
-                    ? displayName[0].toUpperCase()
-                    : '?',
+                displayName.isNotEmpty ? displayName[0].toUpperCase() : '?',
                 style: TextStyle(
                   fontSize: 28,
                   fontWeight: FontWeight.bold,
@@ -265,7 +265,9 @@ class _SignDetailScreenState extends State<SignDetailScreen> {
     final catModel = widget.sign.categoryId != null
         ? _categories.where((c) => c.id == widget.sign.categoryId).firstOrNull
         : null;
-    final catDisplay = catModel != null ? _translator.categoryName(catModel) : (widget.categoryName ?? '');
+    final catDisplay = catModel != null
+        ? _translator.categoryName(catModel)
+        : (widget.categoryName ?? '');
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
       decoration: BoxDecoration(
@@ -375,9 +377,9 @@ class _SignDetailScreenState extends State<SignDetailScreen> {
       child: ElevatedButton.icon(
         onPressed: trained
             ? widget.onPractice
-            : () {
+            : () async {
                 if (widget.sign.id == null) return;
-                Navigator.push(
+                await Navigator.push(
                   context,
                   MaterialPageRoute(
                     builder: (_) => SignRecorderScreen(
@@ -385,6 +387,7 @@ class _SignDetailScreenState extends State<SignDetailScreen> {
                     ),
                   ),
                 );
+                if (mounted) _loadTrainingInfo();
               },
         icon: Icon(trained ? Icons.videocam : Icons.fitness_center),
         label: Text(trained ? 'Practice This Sign' : 'Train This Sign'),
@@ -453,8 +456,7 @@ class _PlayPauseOverlayState extends State<_PlayPauseOverlay> {
       child: Stack(
         alignment: Alignment.center,
         children: [
-          if (_showControls)
-            Container(color: Colors.black26),
+          if (_showControls) Container(color: Colors.black26),
           if (_showControls)
             IconButton(
               icon: Icon(

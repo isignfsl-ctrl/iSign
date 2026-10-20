@@ -75,11 +75,13 @@ class _SignRecorderScreenState extends State<SignRecorderScreen> {
     await _classifier.load();
     await _loadSigns();
     if (widget.initialSignId != null && mounted) {
-      final found = _signs.where((s) => s['id'] == widget.initialSignId).toList();
+      final found =
+          _signs.where((s) => s['id'] == widget.initialSignId).toList();
       if (found.isNotEmpty) {
         setState(() {
           _selectedSignId = widget.initialSignId;
-          _selectedSignDescription = (found.first['description'] as String?) ?? '';
+          _selectedSignDescription =
+              (found.first['description'] as String?) ?? '';
           _selectedSignName = (found.first['sign_name'] as String?) ?? '';
         });
         _loadSampleCount();
@@ -121,7 +123,8 @@ class _SignRecorderScreenState extends State<SignRecorderScreen> {
         MaterialPageRoute(
           builder: (_) => const PermissionRequiredScreen(
             title: 'Camera Permission Required',
-            message: 'Sign Recorder needs camera access to capture hand landmarks for training.',
+            message:
+                'Sign Recorder needs camera access to capture hand landmarks for training.',
             icon: Icons.videocam,
             permission: Permission.camera,
           ),
@@ -139,7 +142,8 @@ class _SignRecorderScreenState extends State<SignRecorderScreen> {
 
       _cameraController?.dispose();
       _cameraSensorOrientation = _cameras![_cameraIndex].sensorOrientation;
-      _isFrontCamera = _cameras![_cameraIndex].lensDirection == CameraLensDirection.front;
+      _isFrontCamera =
+          _cameras![_cameraIndex].lensDirection == CameraLensDirection.front;
       _cameraController = CameraController(
         _cameras![_cameraIndex],
         ResolutionPreset.high,
@@ -173,7 +177,8 @@ class _SignRecorderScreenState extends State<SignRecorderScreen> {
 
   Future<void> _processFrame(CameraImage image) async {
     try {
-      final landmarks = await _mediaPipe.extractLandmarks(image, _cameraController!.description);
+      final landmarks = await _mediaPipe.extractLandmarks(
+          image, _cameraController!.description);
 
       String label = '';
       double confidence = 0.0;
@@ -204,11 +209,13 @@ class _SignRecorderScreenState extends State<SignRecorderScreen> {
           frame.addAll([pt.x, pt.y, pt.z]);
         }
 
-        final handedness = (h == 0) ? _mediaPipe.lastHandedness : _mediaPipe.lastHandedness2;
+        final handedness =
+            (h == 0) ? _mediaPipe.lastHandedness : _mediaPipe.lastHandedness2;
         if (handedness.isEmpty) continue;
 
         if (_isBursting) {
-          _burstFrames.add({'frame': frame, 'handedness': handedness, 'handIdx': h});
+          _burstFrames
+              .add({'frame': frame, 'handedness': handedness, 'handIdx': h});
           final progress = _burstFrames.length;
           if (mounted) {
             setState(() => _burstProgress = progress);
@@ -219,7 +226,8 @@ class _SignRecorderScreenState extends State<SignRecorderScreen> {
         }
 
         if (_isRecordingContinuous) {
-          _continuousFrames.add({'frame': frame, 'handedness': handedness, 'handIdx': h});
+          _continuousFrames
+              .add({'frame': frame, 'handedness': handedness, 'handIdx': h});
         }
       }
     } catch (_) {
@@ -228,7 +236,8 @@ class _SignRecorderScreenState extends State<SignRecorderScreen> {
     }
   }
 
-  List<List<LandmarkPoint>> _transformLandmarks(List<List<LandmarkPoint>> landmarks) {
+  List<List<LandmarkPoint>> _transformLandmarks(
+      List<List<LandmarkPoint>> landmarks) {
     return landmarks.map((hand) {
       return hand.map((pt) {
         double x = pt.x;
@@ -282,8 +291,8 @@ class _SignRecorderScreenState extends State<SignRecorderScreen> {
       }
     }
 
-    final userName = AppSettings().userName.value.isNotEmpty 
-        ? AppSettings().userName.value 
+    final userName = AppSettings().userName.value.isNotEmpty
+        ? AppSettings().userName.value
         : null;
 
     await _repo.insertSample(TrainingSample(
@@ -323,7 +332,8 @@ class _SignRecorderScreenState extends State<SignRecorderScreen> {
       _continuousFrames.clear();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Too few frames recorded — need at least 30')),
+          const SnackBar(
+              content: Text('Too few frames recorded — need at least 30')),
         );
       }
       return;
@@ -335,7 +345,9 @@ class _SignRecorderScreenState extends State<SignRecorderScreen> {
     if (segments.isEmpty) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('No clear sign segments found — try pausing between signs')),
+          const SnackBar(
+              content: Text(
+                  'No clear sign segments found — try pausing between signs')),
         );
       }
       return;
@@ -356,8 +368,8 @@ class _SignRecorderScreenState extends State<SignRecorderScreen> {
         }
       }
       await _repo.insertSample(TrainingSample(
-        userName: AppSettings().userName.value.isNotEmpty 
-            ? AppSettings().userName.value 
+        userName: AppSettings().userName.value.isNotEmpty
+            ? AppSettings().userName.value
             : null,
         signId: _selectedSignId!,
         landmarks: data,
@@ -381,7 +393,8 @@ class _SignRecorderScreenState extends State<SignRecorderScreen> {
     await _loadCounts();
   }
 
-  List<List<Map<String, dynamic>>> _segmentFrames(List<Map<String, dynamic>> frames) {
+  List<List<Map<String, dynamic>>> _segmentFrames(
+      List<Map<String, dynamic>> frames) {
     if (frames.length < _burstTarget) return [];
 
     // Extract just the frame data for velocity calculation
@@ -391,11 +404,14 @@ class _SignRecorderScreenState extends State<SignRecorderScreen> {
     final velocities = <double>[];
     for (int i = 1; i < frameData.length; i++) {
       double sum = 0.0;
-      for (int j = 0; j < min(frameData[i].length, frameData[i - 1].length); j++) {
+      for (int j = 0;
+          j < min(frameData[i].length, frameData[i - 1].length);
+          j++) {
         final d = frameData[i][j] - frameData[i - 1][j];
         sum += d * d;
       }
-      velocities.add(sqrt(sum / min(frameData[i].length, frameData[i - 1].length)));
+      velocities
+          .add(sqrt(sum / min(frameData[i].length, frameData[i - 1].length)));
     }
 
     // Find low-velocity regions (sign boundaries)
@@ -458,7 +474,8 @@ class _SignRecorderScreenState extends State<SignRecorderScreen> {
   Future<void> _exportData() async {
     final csv = await _repo.exportAsCsv(temporal: true);
     final dir = await getApplicationDocumentsDirectory();
-    final file = File('${dir.path}/fsl_temporal_data_${DateTime.now().millisecondsSinceEpoch}.csv');
+    final file = File(
+        '${dir.path}/fsl_temporal_data_${DateTime.now().millisecondsSinceEpoch}.csv');
     await file.writeAsString(csv);
     await SharePlus.instance.share(ShareParams(
       files: [XFile(file.path)],
@@ -476,29 +493,87 @@ class _SignRecorderScreenState extends State<SignRecorderScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Text('1. Select an FSL sign from the dropdown.', style: TextStyle(fontSize: 14, height: 1.5)),
+              const Text('1. Select an FSL sign from the dropdown.',
+                  style: TextStyle(fontSize: 14, height: 1.5)),
               const SizedBox(height: 4),
-              const Text('2. Read the tip below the dropdown to learn how to form the sign.', style: TextStyle(fontSize: 14, height: 1.5)),
+              const Text(
+                  '2. Read the tip below the dropdown to learn how to form the sign.',
+                  style: TextStyle(fontSize: 14, height: 1.5)),
               const SizedBox(height: 4),
-              const Text('3. Position your hand clearly in the camera frame.', style: TextStyle(fontSize: 14, height: 1.5)),
+              const Text('3. Position your hand clearly in the camera frame.',
+                  style: TextStyle(fontSize: 14, height: 1.5)),
               const SizedBox(height: 12),
               const Divider(),
               const SizedBox(height: 8),
-              Text('Burst mode', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: Theme.of(context).colorScheme.primary)),
+              Text('Burst mode',
+                  style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                      color: Theme.of(context).colorScheme.primary)),
               const SizedBox(height: 4),
-              const Text('Captures 30 frames in one quick burst. Best for static signs like numbers, letters, or held handshapes. Hold your hand still while it captures.', style: TextStyle(fontSize: 14, height: 1.5)),
+              const Text(
+                  'Captures 30 frames in one quick burst. Best for static signs like numbers, letters, or held handshapes. Hold your hand still while it captures.',
+                  style: TextStyle(fontSize: 14, height: 1.5)),
               const SizedBox(height: 12),
-              Text('Continuous mode', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: Theme.of(context).colorScheme.primary)),
+              Text('Continuous mode',
+                  style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                      color: Theme.of(context).colorScheme.primary)),
               const SizedBox(height: 4),
-              const Text('Records continuously until you press Stop. The app then auto-segments the recording into individual sign clips. Best for movement-based signs or practicing multiple repetitions in one take.', style: TextStyle(fontSize: 14, height: 1.5)),
+              const Text(
+                  'Records continuously until you press Stop. The app then auto-segments the recording into individual sign clips. Best for movement-based signs or practicing multiple repetitions in one take.',
+                  style: TextStyle(fontSize: 14, height: 1.5)),
             ],
           ),
         ),
         actions: [
-          FilledButton(onPressed: () => Navigator.pop(ctx), child: const Text('Got it')),
+          FilledButton(
+              onPressed: () => Navigator.pop(ctx), child: const Text('Got it')),
         ],
       ),
     );
+  }
+
+  bool get _hasUnfinishedRecording =>
+      (_isBursting && _burstFrames.isNotEmpty) || _isRecordingContinuous;
+
+  Future<void> _confirmDiscardOnBack() async {
+    final discard = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Discard recording?'),
+        content: Text(
+          _isRecordingContinuous
+              ? 'You are still recording. The ${_continuousFrames.length} frames recorded so far will be discarded.'
+              : 'This sample is incomplete (${_burstFrames.length}/$_burstTarget frames) and will be discarded.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Keep recording'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(ctx).colorScheme.error,
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Discard'),
+          ),
+        ],
+      ),
+    );
+    if (discard != true || !mounted) return;
+    setState(() {
+      _isBursting = false;
+      _burstProgress = 0;
+      _isRecordingContinuous = false;
+      _burstFrames.clear();
+      _continuousFrames.clear();
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) Navigator.of(context).pop();
+    });
   }
 
   @override
@@ -512,68 +587,79 @@ class _SignRecorderScreenState extends State<SignRecorderScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Sign Recorder'),
-        actions: [
-          if (_selectedSignId != null)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 4),
-              child: Chip(
-                label: Text(_selectedSignName, style: const TextStyle(fontSize: 13, color: Colors.white)),
-                backgroundColor: AppColors.primary.withValues(alpha: 0.3),
-                side: BorderSide.none,
-                visualDensity: VisualDensity.compact,
+    return PopScope(
+      canPop: !_hasUnfinishedRecording,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop || _isSaving) return;
+        if (_hasUnfinishedRecording) _confirmDiscardOnBack();
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('Sign Recorder'),
+          actions: [
+            if (_selectedSignId != null)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: Chip(
+                  label: Text(_selectedSignName,
+                      style:
+                          const TextStyle(fontSize: 13, color: Colors.white)),
+                  backgroundColor: AppColors.primary.withValues(alpha: 0.3),
+                  side: BorderSide.none,
+                  visualDensity: VisualDensity.compact,
+                ),
               ),
+            IconButton(
+              icon: const Icon(Icons.help_outline),
+              tooltip: 'How to use Sign Recorder',
+              onPressed: _showHelpDialog,
             ),
-          IconButton(
-            icon: const Icon(Icons.help_outline),
-            tooltip: 'How to use Sign Recorder',
-            onPressed: _showHelpDialog,
-          ),
-          IconButton(
-            icon: Icon(_cameraIndex == 0 ? Icons.camera_front : Icons.camera_rear),
-            tooltip: 'Switch camera',
-            onPressed: _switchCamera,
-          ),
-          IconButton(
-            icon: const Icon(Icons.file_download),
-            tooltip: 'Export training data',
-            onPressed: _exportData,
-          ),
-        ],
-      ),
-      body: Column(
-        children: [
-          Expanded(
-            child: _isCameraReady && _cameraController != null
-                ? SizedBox.expand(
-                    child: FittedBox(
-                      fit: BoxFit.cover,
-                      clipBehavior: Clip.hardEdge,
-                      child: SizedBox(
-                        width: _cameraController!.value.previewSize!.height,
-                        height: _cameraController!.value.previewSize!.width,
-                        child: Stack(
-                          children: [
-                            CameraPreview(_cameraController!),
-                            CustomPaint(
-                              size: Size.infinite,
-                              painter: _LandmarkPainter(landmarks: _currentLandmarks),
-                            ),
-                            _buildClassificationOverlay(),
-                          ],
+            IconButton(
+              icon: Icon(
+                  _cameraIndex == 0 ? Icons.camera_front : Icons.camera_rear),
+              tooltip: 'Switch camera',
+              onPressed: _switchCamera,
+            ),
+            IconButton(
+              icon: const Icon(Icons.file_download),
+              tooltip: 'Export training data',
+              onPressed: _exportData,
+            ),
+          ],
+        ),
+        body: Column(
+          children: [
+            Expanded(
+              child: _isCameraReady && _cameraController != null
+                  ? SizedBox.expand(
+                      child: FittedBox(
+                        fit: BoxFit.cover,
+                        clipBehavior: Clip.hardEdge,
+                        child: SizedBox(
+                          width: _cameraController!.value.previewSize!.height,
+                          height: _cameraController!.value.previewSize!.width,
+                          child: Stack(
+                            children: [
+                              CameraPreview(_cameraController!),
+                              CustomPaint(
+                                size: Size.infinite,
+                                painter: _LandmarkPainter(
+                                    landmarks: _currentLandmarks),
+                              ),
+                              _buildClassificationOverlay(),
+                            ],
+                          ),
                         ),
                       ),
+                    )
+                  : Container(
+                      color: AppColors.darkBackground,
+                      child: const Center(child: CircularProgressIndicator()),
                     ),
-                  )
-                : Container(
-                    color: AppColors.darkBackground,
-                    child: const Center(child: CircularProgressIndicator()),
-                  ),
-          ),
-          _buildControls(),
-        ],
+            ),
+            _buildControls(),
+          ],
+        ),
       ),
     );
   }
@@ -614,7 +700,8 @@ class _SignRecorderScreenState extends State<SignRecorderScreen> {
                     if (_selectedSignName.isNotEmpty)
                       Text(
                         'Selected: $_selectedSignName',
-                        style: const TextStyle(fontSize: 12, color: Colors.white54),
+                        style: const TextStyle(
+                            fontSize: 12, color: Colors.white54),
                       ),
                   ],
                 ),
@@ -669,18 +756,22 @@ class _SignRecorderScreenState extends State<SignRecorderScreen> {
               labelStyle: const TextStyle(color: Colors.white70),
               filled: true,
               fillColor: Colors.white12,
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              border:
+                  OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
             ),
             dropdownColor: const Color(0xFF1E1E1E),
             style: const TextStyle(color: Colors.white, fontSize: 16),
-            items: _signs.map((s) => DropdownMenuItem(
-              value: s['id'] as int,
-              child: Text(s['sign_name'] as String),
-            )).toList(),
+            items: _signs
+                .map((s) => DropdownMenuItem(
+                      value: s['id'] as int,
+                      child: Text(s['sign_name'] as String),
+                    ))
+                .toList(),
             onChanged: (v) {
               setState(() {
                 _selectedSignId = v;
-                final s = _signs.firstWhere((s) => s['id'] == v, orElse: () => <String, dynamic>{});
+                final s = _signs.firstWhere((s) => s['id'] == v,
+                    orElse: () => <String, dynamic>{});
                 _selectedSignDescription = (s['description'] as String?) ?? '';
                 _selectedSignName = (s['sign_name'] as String?) ?? '';
               });
@@ -696,16 +787,19 @@ class _SignRecorderScreenState extends State<SignRecorderScreen> {
               decoration: BoxDecoration(
                 color: AppColors.primary.withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+                border:
+                    Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
               ),
               child: Row(
                 children: [
-                  Icon(Icons.info_outline, color: AppColors.accentLight, size: 18),
+                  Icon(Icons.info_outline,
+                      color: AppColors.accentLight, size: 18),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       _selectedSignDescription,
-                      style: const TextStyle(color: Colors.white, fontSize: 14, height: 1.4),
+                      style: const TextStyle(
+                          color: Colors.white, fontSize: 14, height: 1.4),
                     ),
                   ),
                 ],
@@ -719,7 +813,8 @@ class _SignRecorderScreenState extends State<SignRecorderScreen> {
                 color: Colors.orange.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(10),
               ),
-              child: const Text('No description available for this sign.', style: TextStyle(color: Colors.orangeAccent, fontSize: 13)),
+              child: const Text('No description available for this sign.',
+                  style: TextStyle(color: Colors.orangeAccent, fontSize: 13)),
             ),
           if (_selectedSignId == null)
             Container(
@@ -733,7 +828,8 @@ class _SignRecorderScreenState extends State<SignRecorderScreen> {
                 children: [
                   Icon(Icons.arrow_upward, color: Colors.amber, size: 16),
                   SizedBox(width: 6),
-                  Text('Select a sign above to begin training', style: TextStyle(color: Colors.amber, fontSize: 13)),
+                  Text('Select a sign above to begin training',
+                      style: TextStyle(color: Colors.amber, fontSize: 13)),
                 ],
               ),
             ),
@@ -742,11 +838,13 @@ class _SignRecorderScreenState extends State<SignRecorderScreen> {
           Row(
             children: [
               Expanded(
-                child: _buildModeButton(RecorderMode.burst, 'Burst', Icons.burst_mode),
+                child: _buildModeButton(
+                    RecorderMode.burst, 'Burst', Icons.burst_mode),
               ),
               const SizedBox(width: 8),
               Expanded(
-                child: _buildModeButton(RecorderMode.continuous, 'Continuous', Icons.radio_button_checked),
+                child: _buildModeButton(RecorderMode.continuous, 'Continuous',
+                    Icons.radio_button_checked),
               ),
             ],
           ),
@@ -756,7 +854,9 @@ class _SignRecorderScreenState extends State<SignRecorderScreen> {
             children: [
               const SizedBox(width: 12),
               Icon(
-                _recorderMode == RecorderMode.burst ? Icons.flash_on : Icons.videocam,
+                _recorderMode == RecorderMode.burst
+                    ? Icons.flash_on
+                    : Icons.videocam,
                 size: 14,
                 color: Colors.white54,
               ),
@@ -776,8 +876,10 @@ class _SignRecorderScreenState extends State<SignRecorderScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
-              Text('Samples for this sign: $_sampleCount', style: const TextStyle(color: Colors.white70)),
-              Text('Total samples: $_totalSamples', style: const TextStyle(color: Colors.white70)),
+              Text('Samples for this sign: $_sampleCount',
+                  style: const TextStyle(color: Colors.white70)),
+              Text('Total samples: $_totalSamples',
+                  style: const TextStyle(color: Colors.white70)),
             ],
           ),
           const SizedBox(height: 4),
@@ -812,14 +914,17 @@ class _SignRecorderScreenState extends State<SignRecorderScreen> {
   Widget _buildModeButton(RecorderMode mode, String label, IconData icon) {
     final isActive = _recorderMode == mode;
     return OutlinedButton.icon(
-      onPressed: (_selectedSignId != null && !_isRecordingContinuous && !_isBursting)
-          ? () => setState(() => _recorderMode = mode)
-          : null,
+      onPressed:
+          (_selectedSignId != null && !_isRecordingContinuous && !_isBursting)
+              ? () => setState(() => _recorderMode = mode)
+              : null,
       icon: Icon(icon, size: 18),
       label: Text(label, style: const TextStyle(fontSize: 13)),
       style: OutlinedButton.styleFrom(
         foregroundColor: isActive ? AppColors.accentLight : Colors.white54,
-        backgroundColor: isActive ? AppColors.accentLight.withValues(alpha: 0.15) : Colors.white12,
+        backgroundColor: isActive
+            ? AppColors.accentLight.withValues(alpha: 0.15)
+            : Colors.white12,
         side: BorderSide(
           color: isActive ? AppColors.accentLight : Colors.white24,
         ),
@@ -835,11 +940,17 @@ class _SignRecorderScreenState extends State<SignRecorderScreen> {
         children: [
           Expanded(
             child: ElevatedButton.icon(
-              onPressed: (_selectedSignId != null && !_isSaving && !_isBursting && _currentLandmarks.isNotEmpty)
+              onPressed: (_selectedSignId != null &&
+                      !_isSaving &&
+                      !_isBursting &&
+                      _currentLandmarks.isNotEmpty)
                   ? _captureSample
                   : null,
               icon: _isSaving
-                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2))
                   : (_isBursting
                       ? const Icon(Icons.hourglass_top)
                       : const Icon(Icons.camera_alt)),
@@ -847,10 +958,12 @@ class _SignRecorderScreenState extends State<SignRecorderScreen> {
                   ? 'Recording $_burstProgress/$_burstTarget...'
                   : (_isSaving ? 'Saving...' : 'Record 30 frames')),
               style: ElevatedButton.styleFrom(
-                backgroundColor: _isBursting ? Colors.orange : AppColors.accentLight,
+                backgroundColor:
+                    _isBursting ? Colors.orange : AppColors.accentLight,
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
               ),
             ),
           ),
@@ -868,12 +981,19 @@ class _SignRecorderScreenState extends State<SignRecorderScreen> {
           child: ElevatedButton.icon(
             onPressed: _isRecordingContinuous
                 ? _stopContinuous
-                : (_selectedSignId != null && !_isSaving && _currentLandmarks.isNotEmpty
+                : (_selectedSignId != null &&
+                        !_isSaving &&
+                        _currentLandmarks.isNotEmpty
                     ? _startContinuous
                     : null),
             icon: _isSaving
-                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                : Icon(_isRecordingContinuous ? Icons.stop : Icons.fiber_manual_record),
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2))
+                : Icon(_isRecordingContinuous
+                    ? Icons.stop
+                    : Icons.fiber_manual_record),
             label: Text(
               _isSaving
                   ? 'Saving segments...'
@@ -882,10 +1002,13 @@ class _SignRecorderScreenState extends State<SignRecorderScreen> {
                       : 'Start Recording'),
             ),
             style: ElevatedButton.styleFrom(
-              backgroundColor: _isRecordingContinuous ? Colors.red : (_isSaving ? Colors.grey : Colors.green),
+              backgroundColor: _isRecordingContinuous
+                  ? Colors.red
+                  : (_isSaving ? Colors.grey : Colors.green),
               foregroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(vertical: 14),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
             ),
           ),
         ),
@@ -900,11 +1023,26 @@ class _LandmarkPainter extends CustomPainter {
   _LandmarkPainter({required this.landmarks});
 
   static const _connections = [
-    [0, 1], [1, 2], [2, 3], [3, 4],
-    [0, 5], [5, 6], [6, 7], [7, 8],
-    [5, 9], [9, 10], [10, 11], [11, 12],
-    [9, 13], [13, 14], [14, 15], [15, 16],
-    [13, 17], [17, 18], [18, 19], [19, 20],
+    [0, 1],
+    [1, 2],
+    [2, 3],
+    [3, 4],
+    [0, 5],
+    [5, 6],
+    [6, 7],
+    [7, 8],
+    [5, 9],
+    [9, 10],
+    [10, 11],
+    [11, 12],
+    [9, 13],
+    [13, 14],
+    [14, 15],
+    [15, 16],
+    [13, 17],
+    [17, 18],
+    [18, 19],
+    [19, 20],
     [0, 17],
   ];
 
@@ -924,8 +1062,10 @@ class _LandmarkPainter extends CustomPainter {
     for (final hand in landmarks) {
       for (final conn in _connections) {
         if (conn[0] < hand.length && conn[1] < hand.length) {
-          final p1 = Offset(hand[conn[0]].x * size.width, hand[conn[0]].y * size.height);
-          final p2 = Offset(hand[conn[1]].x * size.width, hand[conn[1]].y * size.height);
+          final p1 = Offset(
+              hand[conn[0]].x * size.width, hand[conn[0]].y * size.height);
+          final p2 = Offset(
+              hand[conn[1]].x * size.width, hand[conn[1]].y * size.height);
           canvas.drawLine(p1, p2, paint);
         }
       }

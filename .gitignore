@@ -54,3 +54,9 @@ Thumbs.db
 hands.md
 # GitHub workflows (require workflow scope to push)
 .github/workflows/
+
+# Firebase Hosting cache
+admin/.firebase/
+
+# Archives
+*.rar

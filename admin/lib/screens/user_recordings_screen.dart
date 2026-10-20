@@ -175,10 +175,8 @@ class _UserRecordingsScreenState extends State<UserRecordingsScreen> {
           content: Text('Auto-delete set to $_autoDeleteDays days'),
           behavior: SnackBarBehavior.floating,
         ));
+      }
     }
-  }
-}
-  }
   }
 
   void _exportCsv(List<QueryDocumentSnapshot> allDocs) {
@@ -430,9 +428,10 @@ class _UserRecordingsScreenState extends State<UserRecordingsScreen> {
               ]),
             ),
           ),
-        ],
-      ),
-    );
+        ),
+      ],
+    ),
+  );
   }
 
   Color _statusColor(RecordingStatus status) {
@@ -544,14 +543,6 @@ class _UserRecordingsScreenState extends State<UserRecordingsScreen> {
         Expanded(child: Text(value, style: TextStyle(fontSize: 13, color: theme.colorScheme.onSurfaceVariant))),
       ]),
     );
-  }
-
-  Color _statusColor(RecordingStatus status) {
-    switch (status) {
-      case RecordingStatus.pending: return AppColors.statusPending;
-      case RecordingStatus.approved: return AppColors.statusApproved;
-      case RecordingStatus.rejected: return AppColors.statusRejected;
-    }
   }
 }
 

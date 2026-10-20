@@ -269,12 +269,17 @@ class _CatalogScreenState extends State<CatalogScreen> {
                                 color: isTrained ? Colors.green.withValues(alpha: 0.15) : Colors.orange.withValues(alpha: 0.15),
                                 borderRadius: BorderRadius.circular(8),
                               ),
-                              child: Text(
-                                isTrained ? 'Trained' : 'Pending',
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w600,
-                                  color: isTrained ? Colors.green.shade700 : Colors.orange.shade700,
+                              child: Tooltip(
+                                message: isTrained
+                                    ? 'Trained — 5+ approved recording samples. Ready for use.'
+                                    : 'Pending — fewer than 5 approved recording samples. More recordings needed before this sign can be trained.',
+                                child: Text(
+                                  isTrained ? 'Trained' : 'Pending',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: isTrained ? Colors.green.shade700 : Colors.orange.shade700,
+                                  ),
                                 ),
                               ),
                             )),
@@ -317,12 +322,17 @@ class _CatalogScreenState extends State<CatalogScreen> {
                                   color: isTrained ? Colors.green.withValues(alpha: 0.15) : Colors.orange.withValues(alpha: 0.15),
                                   borderRadius: BorderRadius.circular(8),
                                 ),
-                                child: Text(
-                                  isTrained ? 'Trained' : 'Pending',
-                                  style: TextStyle(
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.w600,
-                                    color: isTrained ? Colors.green.shade700 : Colors.orange.shade700,
+                                child: Tooltip(
+                                  message: isTrained
+                                      ? 'Trained — 5+ approved recording samples. Ready for use.'
+                                      : 'Pending — fewer than 5 approved recording samples. More recordings needed before this sign can be trained.',
+                                  child: Text(
+                                    isTrained ? 'Trained' : 'Pending',
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w600,
+                                      color: isTrained ? Colors.green.shade700 : Colors.orange.shade700,
+                                    ),
                                   ),
                                 ),
                               ),

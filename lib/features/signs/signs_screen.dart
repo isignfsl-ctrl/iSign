@@ -118,7 +118,8 @@ class _SignsScreenState extends State<SignsScreen> {
 
   void _deleteSign(FslSignModel sign) async {
     final db = await DbHelper().database;
-    await db.delete('training_samples', where: 'sign_id = ?', whereArgs: [sign.id]);
+    await db
+        .delete('training_samples', where: 'sign_id = ?', whereArgs: [sign.id]);
     await db.delete('sign_media', where: 'sign_id = ?', whereArgs: [sign.id]);
     await db.delete('fsl_signs', where: 'id = ?', whereArgs: [sign.id]);
     _allSigns.removeWhere((s) => s.id == sign.id);
@@ -129,10 +130,10 @@ class _SignsScreenState extends State<SignsScreen> {
     final query = _searchController.text.trim().toLowerCase();
     setState(() {
       _filteredSigns = _allSigns.where((s) {
-        final matchesCategory = _selectedCategoryId == null ||
-            s.categoryId == _selectedCategoryId;
-        final matchesSearch = query.isEmpty ||
-            s.signName.toLowerCase().contains(query);
+        final matchesCategory =
+            _selectedCategoryId == null || s.categoryId == _selectedCategoryId;
+        final matchesSearch =
+            query.isEmpty || s.signName.toLowerCase().contains(query);
         return matchesCategory && matchesSearch;
       }).toList();
     });
@@ -149,9 +150,10 @@ class _SignsScreenState extends State<SignsScreen> {
   String _categoryName(int? categoryId) {
     if (categoryId == null) return '';
     return _categories
-        .where((c) => c.id == categoryId)
-        .map((c) => c.categoryName)
-        .firstOrNull ?? '';
+            .where((c) => c.id == categoryId)
+            .map((c) => c.categoryName)
+            .firstOrNull ??
+        '';
   }
 
   @override
@@ -186,22 +188,37 @@ class _SignsScreenState extends State<SignsScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                TextField(controller: nameCtl, decoration: const InputDecoration(labelText: 'Sign Name', hintText: 'e.g. Salamat')),
+                TextField(
+                    controller: nameCtl,
+                    decoration: const InputDecoration(
+                        labelText: 'Sign Name', hintText: 'e.g. Salamat')),
                 const SizedBox(height: 12),
-                TextField(controller: descCtl, decoration: const InputDecoration(labelText: 'Description', hintText: 'Describe the gesture'), maxLines: 3),
+                TextField(
+                    controller: descCtl,
+                    decoration: const InputDecoration(
+                        labelText: 'Description',
+                        hintText: 'Describe the gesture'),
+                    maxLines: 3),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<int?>(
                   value: selectedCatId,
                   decoration: const InputDecoration(labelText: 'Category'),
-                  items: _categories.map((c) => DropdownMenuItem(value: c.id, child: Text(c.categoryName))).toList(),
+                  items: _categories
+                      .map((c) => DropdownMenuItem(
+                          value: c.id, child: Text(c.categoryName)))
+                      .toList(),
                   onChanged: (v) => setDialogState(() => selectedCatId = v),
                 ),
               ],
             ),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Cancel')),
-            FilledButton(onPressed: () => Navigator.of(ctx).pop(true), child: const Text('Save')),
+            TextButton(
+                onPressed: () => Navigator.of(ctx).pop(false),
+                child: const Text('Cancel')),
+            FilledButton(
+                onPressed: () => Navigator.of(ctx).pop(true),
+                child: const Text('Save')),
           ],
         ),
       ),
@@ -255,7 +272,8 @@ class _SignsScreenState extends State<SignsScreen> {
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
         children: [
           _buildChip('All', null),
-          ..._categories.map((c) => _buildChip(_translator.categoryName(c), c.id)),
+          ..._categories
+              .map((c) => _buildChip(_translator.categoryName(c), c.id)),
         ],
       ),
     );
@@ -342,10 +360,14 @@ class _SignsScreenState extends State<SignsScreen> {
                   title: Text('Delete "${_translator.signName(sign)}"?'),
                   content: const Text('This sign will be permanently deleted.'),
                   actions: [
-                    TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+                    TextButton(
+                        onPressed: () => Navigator.pop(ctx, false),
+                        child: const Text('Cancel')),
                     TextButton(
                       onPressed: () => Navigator.pop(ctx, true),
-                      child: Text('Delete', style: TextStyle(color: Theme.of(context).colorScheme.error)),
+                      child: Text('Delete',
+                          style: TextStyle(
+                              color: Theme.of(context).colorScheme.error)),
                     ),
                   ],
                 ),
@@ -375,23 +397,26 @@ class _SignsScreenState extends State<SignsScreen> {
     final catModel = sign.categoryId != null
         ? _categories.where((c) => c.id == sign.categoryId).firstOrNull
         : null;
-    final catDisplay = catModel != null ? _translator.categoryName(catModel) : filipinoCatName;
+    final catDisplay =
+        catModel != null ? _translator.categoryName(catModel) : filipinoCatName;
     final displayName = _translator.signName(sign);
     final displayDesc = _translator.signDescription(sign);
     final sampleCount = _sampleCounts[sign.id] ?? 0;
     final refCount = _refCounts[sign.id] ?? 0;
-    final isTrained = sign.trainingStatus == 'trained' || refCount >= TrainingRepository.minSamplesForTrained;
+    final isTrained = sign.trainingStatus == 'trained' ||
+        refCount >= TrainingRepository.minSamplesForTrained;
 
     return Card(
       elevation: 2,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
-        side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant, width: 1),
+        side: BorderSide(
+            color: Theme.of(context).colorScheme.outlineVariant, width: 1),
       ),
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
-        onTap: () {
-          Navigator.push(
+        onTap: () async {
+          await Navigator.push(
             context,
             MaterialPageRoute(
               builder: (_) => SignDetailScreen(
@@ -404,6 +429,7 @@ class _SignsScreenState extends State<SignsScreen> {
               ),
             ),
           );
+          if (mounted) _loadData();
         },
         child: Padding(
           padding: const EdgeInsets.all(14),
@@ -415,7 +441,8 @@ class _SignsScreenState extends State<SignsScreen> {
                   if (catDisplay.isNotEmpty)
                     Flexible(
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 3),
                         decoration: BoxDecoration(
                           color: catColor.withValues(alpha: 0.15),
                           borderRadius: BorderRadius.circular(12),
@@ -433,7 +460,8 @@ class _SignsScreenState extends State<SignsScreen> {
                     ),
                   const SizedBox(width: 4),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                     decoration: BoxDecoration(
                       color: isTrained
                           ? Colors.green.withValues(alpha: 0.15)
@@ -445,7 +473,9 @@ class _SignsScreenState extends State<SignsScreen> {
                       style: TextStyle(
                         fontSize: 10,
                         fontWeight: FontWeight.w700,
-                        color: isTrained ? Colors.green.shade700 : Colors.orange.shade700,
+                        color: isTrained
+                            ? Colors.green.shade700
+                            : Colors.orange.shade700,
                       ),
                     ),
                   ),
@@ -466,9 +496,7 @@ class _SignsScreenState extends State<SignsScreen> {
                 ),
                 alignment: Alignment.center,
                 child: Text(
-                  displayName.isNotEmpty
-                      ? displayName[0].toUpperCase()
-                      : '?',
+                  displayName.isNotEmpty ? displayName[0].toUpperCase() : '?',
                   style: TextStyle(
                     fontSize: 22,
                     fontWeight: FontWeight.bold,
