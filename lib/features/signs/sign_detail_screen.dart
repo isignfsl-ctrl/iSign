@@ -370,7 +370,7 @@ class _SignDetailScreenState extends State<SignDetailScreen> {
   }
 
   Widget _buildActionButton() {
-    final trained = widget.sign.trainingStatus == 'trained';
+    final trained = _isTrained;
     return SizedBox(
       width: double.infinity,
       height: 56,

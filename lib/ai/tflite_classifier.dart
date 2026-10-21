@@ -244,7 +244,10 @@ class TfliteClassifier {
     final label = HandShapeRecognizer.signNameForShape(rawLabel);
     final ext = _shapeRecognizer.getFingerExtensions(landmarks);
     final count = ext.where((e) => e > 0.55).length;
-    final confidence = (count == 0 || count >= 4) ? 0.85 : 0.75;
+    // Heuristic rules are a fallback, not ground truth — keep their
+    // confidence below the NN's winning range so a confidently trained
+    // model (and reference matching) always takes priority.
+    final confidence = (count == 0 || count >= 4) ? 0.6 : 0.5;
     return ClassificationResult(label: label, confidence: confidence);
   }
 

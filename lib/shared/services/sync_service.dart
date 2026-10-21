@@ -288,42 +288,51 @@ class SyncService {
 
         if (signId == null || framesJson == null) continue;
 
-        // Check if already downloaded
         final cloudPath = 'recordings/${doc.id}';
-        final existing = await db.query('reference_landmarks',
-            where: 'cloud_path = ?', whereArgs: [cloudPath]);
-        if (existing.isNotEmpty) continue;
 
         try {
           final payload = jsonDecode(framesJson) as Map<String, dynamic>;
-          final frames = payload['frames'] as List<dynamic>?;
-          if (frames == null || frames.isEmpty) continue;
+          final rawFrames = payload['frames'] as List<dynamic>?;
+          if (rawFrames == null || rawFrames.isEmpty) continue;
 
-          final allLandmarks = <double>[];
-          for (final frame in frames) {
-            if (frame is List) {
-              for (final v in frame) {
-                allLandmarks.add((v as num).toDouble());
-              }
+          // One reference row per recorded sample (each sample is a flat
+          // 63-value frame sequence). COUNT(*) of rows therefore equals the
+          // number of approved samples for the sign.
+          final samples = <List<double>>[];
+          for (final f in rawFrames) {
+            if (f is! List || f.isEmpty) continue;
+            if (!f.every((v) => v is num)) continue;
+            final nums = <double>[for (final v in f) (v as num).toDouble()];
+            if (nums.length >= 63) samples.add(nums);
+          }
+          if (samples.isEmpty) continue;
+
+          final existing = await db.query('reference_landmarks',
+              where: 'cloud_path = ?', whereArgs: [cloudPath]);
+          if (existing.length != samples.length) {
+            // (Re)materialize rows for this recording — also migrates legacy
+            // rows that concatenated every sample into a single row.
+            await db.delete('reference_landmarks',
+                where: 'cloud_path = ?', whereArgs: [cloudPath]);
+            for (final sample in samples) {
+              await db.insert('reference_landmarks', {
+                'sign_id': signId,
+                'landmarks_json': jsonEncode(sample),
+                'handedness': data['handedness'] as String? ?? 'unknown',
+                'hand_idx': data['handIdx'] as int? ?? 0,
+                'frame_count': sample.length ~/ 63,
+                'cloud_path': cloudPath,
+              });
             }
           }
 
-          await db.insert('reference_landmarks', {
-            'sign_id': signId,
-            'landmarks_json': jsonEncode(allLandmarks),
-            'handedness': data['handedness'] as String? ?? 'unknown',
-            'hand_idx': data['handIdx'] as int? ?? 0,
-            'frame_count': frames.length,
-            'cloud_path': cloudPath,
-          });
-
-          // Update training status
+          // Update training status (rows == approved samples)
           final refCount = await db.rawQuery(
             'SELECT COUNT(*) as cnt FROM reference_landmarks WHERE sign_id = ?',
             [signId],
           );
           final count = (refCount.first['cnt'] as int?) ?? 0;
-          final newStatus = count >= 5 ? 'trained' : 'pending';
+          final newStatus = count >= 5 ? 'trained' : 'untrained';
           await db.update('fsl_signs', {'training_status': newStatus},
               where: 'id = ?', whereArgs: [signId]);
 

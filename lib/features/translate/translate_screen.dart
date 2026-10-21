@@ -239,26 +239,26 @@ class TranslateScreenState extends State<TranslateScreen>
       if (landmarks.isNotEmpty && landmarks[0].length >= 21) {
         var result0 = _classifier.classifyFused(landmarks[0]);
 
-        // Fallback to reference matching if classifier confidence is low
-        if (result0.confidence < 0.6 && _refMatcher.isLoaded) {
+        // Trained reference matching takes priority: approved recordings of
+        // this sign are ground truth and beat the static heuristics/NN.
+        // Order: DTW sequence match → single-frame match → fused classifier.
+        if (_refMatcher.isLoaded) {
           final normalized = _classifier.normalizeLandmarks(landmarks[0]);
           final refResult = await _refMatcher.match(normalized);
-          if (refResult != null && refResult.confidence > result0.confidence) {
-            result0 = refResult;
+
+          ClassificationResult? seqResult;
+          final buffer = _classifier.landmarkBuffer;
+          if (buffer.isFull) {
+            final window = buffer.getWindow();
+            if (window.length >= 5) {
+              seqResult = await _refMatcher.matchSequence(window);
+            }
           }
 
-          // Try DTW sequence matching if buffer is available
-          if (result0.confidence < 0.6) {
-            final buffer = _classifier.landmarkBuffer;
-            if (buffer.isFull) {
-              final window = buffer.getWindow();
-              if (window.length >= 5) {
-                final seqResult = await _refMatcher.matchSequence(window);
-                if (seqResult != null && seqResult.confidence > result0.confidence) {
-                  result0 = seqResult;
-                }
-              }
-            }
+          if (seqResult != null) {
+            result0 = seqResult;
+          } else if (refResult != null) {
+            result0 = refResult;
           }
         }
 

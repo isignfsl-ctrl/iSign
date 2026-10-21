@@ -111,7 +111,7 @@ class TrainingUploadService {
         'framesJson': payload,
         'handedness': sample.handedness,
         'handIdx': sample.handIdx,
-        'frameCount': sample.landmarks.length ~/ 63,
+        'frameCount': 1,
         'durationMs': (sample.recordedAt != null
             ? DateTime.now().difference(sample.recordedAt!).inMilliseconds
             : 0),

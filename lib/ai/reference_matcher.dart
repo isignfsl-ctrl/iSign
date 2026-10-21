@@ -7,6 +7,7 @@ import 'classification_result.dart';
 class ReferenceMatcher {
   final _repo = TrainingRepository();
   Map<int, List<ReferenceLandmark>> _references = {};
+  final _trained = <int, bool>{};
   bool _loaded = false;
 
   bool get isLoaded => _loaded;
@@ -17,6 +18,11 @@ class ReferenceMatcher {
     for (final ref in all) {
       _references.putIfAbsent(ref.signId, () => []).add(ref);
     }
+    // Cache training statuses so matching doesn't hit the DB per frame.
+    _trained.clear();
+    for (final signId in _references.keys) {
+      _trained[signId] = await _repo.getTrainingStatus(signId) == 'trained';
+    }
     _loaded = true;
   }
 
@@ -24,8 +30,30 @@ class ReferenceMatcher {
     load();
   }
 
-  /// Compare a single live frame (63 values) against all references.
-  /// Returns the best matching sign and confidence, or null if no good match.
+  /// Wrist-center + middle-finger-scale normalization — identical to
+  /// [TfliteClassifier.normalizeLandmarks] and the model training pipeline.
+  /// References are stored in raw image space, so they must be normalized
+  /// into the same space as the live frames before comparing.
+  static List<double> _normalizeFrame(List<double> f) {
+    if (f.length < 63) return f;
+    final wx = f[0], wy = f[1], wz = f[2];
+    final dx = f[36] - f[27]; // tip(12).x - mcp(9).x
+    final dy = f[37] - f[28];
+    final dz = f[38] - f[29];
+    final midLen = sqrt(dx * dx + dy * dy + dz * dz);
+    final scale = midLen < 0.001 ? 1.0 : midLen;
+    final out = List<double>.filled(63, 0);
+    for (var i = 0; i < 21; i++) {
+      out[i * 3] = (f[i * 3] - wx) / scale;
+      out[i * 3 + 1] = (f[i * 3 + 1] - wy) / scale;
+      out[i * 3 + 2] = (f[i * 3 + 2] - wz) / scale;
+    }
+    return out;
+  }
+
+  /// Compare a single live frame (63 values, already normalized) against all
+  /// references. Returns the best matching sign and confidence, or null if no
+  /// good match.
   Future<ClassificationResult?> match(List<double> liveFrame) async {
     if (!_loaded || _references.isEmpty) return null;
 
@@ -36,9 +64,7 @@ class ReferenceMatcher {
       final signId = entry.key;
       final refs = entry.value;
       if (refs.isEmpty) continue;
-
-      final status = await _repo.getTrainingStatus(signId);
-      if (status != 'trained') continue;
+      if (_trained[signId] != true) continue;
 
       for (final ref in refs) {
         final frames = ref.frames;
@@ -47,9 +73,10 @@ class ReferenceMatcher {
         double minDist = double.infinity;
         for (final refFrame in frames) {
           if (refFrame.length < 63 || liveFrame.length < 63) continue;
+          final nf = _normalizeFrame(refFrame);
           double dist = 0;
           for (int i = 0; i < 63; i++) {
-            final d = liveFrame[i] - refFrame[i];
+            final d = liveFrame[i] - nf[i];
             dist += d * d;
           }
           dist = sqrt(dist / 63);
@@ -72,7 +99,8 @@ class ReferenceMatcher {
     return ClassificationResult(label: signName, confidence: confidence);
   }
 
-  /// Compare a sequence of frames against references using DTW.
+  /// Compare a sequence of frames (already normalized) against references
+  /// using DTW.
   Future<ClassificationResult?> matchSequence(List<List<double>> buffer) async {
     if (!_loaded || _references.isEmpty || buffer.length < 5) return null;
 
@@ -83,15 +111,14 @@ class ReferenceMatcher {
       final signId = entry.key;
       final refs = entry.value;
       if (refs.isEmpty) continue;
-
-      final status = await _repo.getTrainingStatus(signId);
-      if (status != 'trained') continue;
+      if (_trained[signId] != true) continue;
 
       for (final ref in refs) {
         final refFrames = ref.frames;
         if (refFrames.length < 5) continue;
 
-        final score = _dtwDistance(buffer, refFrames);
+        final score = _dtwDistance(
+            buffer, [for (final f in refFrames) _normalizeFrame(f)]);
         if (score < bestScore) {
           bestScore = score;
           bestSignId = signId;

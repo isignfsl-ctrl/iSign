@@ -71,6 +71,12 @@ class _RecordingsScreenState extends State<RecordingsScreen> {
         await _onApprove(id);
       }
     } else {
+      final affectedSignIds = <int>{};
+      for (final id in _selectedIds) {
+        final d = await _fb.firestore.collection('recordings').doc(id).get();
+        final sid = d.data()?['signId'] as int?;
+        if (sid != null) affectedSignIds.add(sid);
+      }
       final batch = _fb.firestore.batch();
       for (final id in _selectedIds) {
         batch.update(_fb.firestore.collection('recordings').doc(id), {
@@ -78,6 +84,9 @@ class _RecordingsScreenState extends State<RecordingsScreen> {
         });
       }
       await batch.commit();
+      for (final sid in affectedSignIds) {
+        await _recomputeApprovedCount(sid);
+      }
     }
     if (mounted) {
       setState(() { _selectedIds.clear(); _selectMode = false; });
@@ -93,7 +102,6 @@ class _RecordingsScreenState extends State<RecordingsScreen> {
     final data = doc.data();
     if (data == null) return;
     final signId = data['signId'] as int?;
-    final landmarksPath = data['landmarksPath'] as String?;
 
     // Update recording status
     await _fb.firestore.collection('recordings').doc(docId).update({
@@ -101,27 +109,9 @@ class _RecordingsScreenState extends State<RecordingsScreen> {
       'reviewedAt': DateTime.now().toIso8601String(),
     });
 
-    // Update catalog entry if we have sign info
-    if (signId != null && landmarksPath != null) {
-      final catSnapshot = await _fb.firestore
-          .collection('catalog')
-          .where('signId', isEqualTo: signId)
-          .limit(1)
-          .get();
-      if (catSnapshot.docs.isNotEmpty) {
-        final catDoc = catSnapshot.docs.first;
-        final catData = catDoc.data();
-        final existingPaths = (catData['landmarkSamplePaths'] as List<dynamic>?)
-                ?.cast<String>() ?? [];
-        if (!existingPaths.contains(landmarksPath)) {
-          existingPaths.add(landmarksPath);
-        }
-        final approvedCount = (catData['approvedSampleCount'] as int? ?? 0) + 1;
-        await _fb.firestore.collection('catalog').doc(catDoc.id).update({
-          'landmarkSamplePaths': existingPaths,
-          'approvedSampleCount': approvedCount,
-        });
-      }
+    // Update catalog entry (sample count, idempotent)
+    if (signId != null) {
+      await _recomputeApprovedCount(signId);
     }
 
     // Update device trust
@@ -134,6 +124,31 @@ class _RecordingsScreenState extends State<RecordingsScreen> {
         });
       }
     } catch (_) {}
+  }
+
+  /// Recompute catalog `approvedSampleCount` for a sign as the number of
+  /// SAMPLES contained in its approved recordings. Both approve and reject
+  /// funnel through here instead of incrementing, so the value stays correct
+  /// even when a recording's status changes more than once.
+  Future<void> _recomputeApprovedCount(int signId) async {
+    final snap = await _fb.firestore
+        .collection('recordings')
+        .where('signId', isEqualTo: signId)
+        .where('status', isEqualTo: 'approved')
+        .get();
+    var total = 0;
+    for (final d in snap.docs) {
+      final fc = (d.data()['frameCount'] as num?)?.toInt();
+      total += (fc != null && fc > 0) ? fc : 1;
+    }
+    final cat = await _fb.firestore
+        .collection('catalog')
+        .where('signId', isEqualTo: signId)
+        .limit(1)
+        .get();
+    if (cat.docs.isNotEmpty) {
+      await cat.docs.first.reference.update({'approvedSampleCount': total});
+    }
   }
 
   void _exportCsv(List<QueryDocumentSnapshot> allDocs) {
@@ -320,7 +335,7 @@ class _RecordingsScreenState extends State<RecordingsScreen> {
                                     if (recording.motionScore != null) _qualityBadge(recording.motionScore!),
                                   ]),
                                   const SizedBox(height: 2),
-                                  Text('${recording.handedness} · ${recording.frameCount} frames · ${recording.durationMs}ms', style: theme.textTheme.bodySmall),
+                                  Text('${recording.handedness} · ${recording.frameCount} samples · ${recording.durationMs}ms', style: theme.textTheme.bodySmall),
                                   Text(recording.submittedAt.toLocal().toString().substring(0, 19), style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
                                 ],
                               ),
@@ -368,6 +383,8 @@ class _RecordingsScreenState extends State<RecordingsScreen> {
                           await _fb.firestore.collection('recordings').doc(doc.id).update({
                             'status': 'rejected', 'reviewedAt': DateTime.now().toIso8601String(),
                           });
+                          final sid = data['signId'] as int?;
+                          if (sid != null) await _recomputeApprovedCount(sid);
                         }
                         if (!context.mounted) return false;
                         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -449,7 +466,7 @@ class _RecordingsScreenState extends State<RecordingsScreen> {
                   const SizedBox(height: 16),
                   _section('Recording Info', [
                     _detailRow('Sign ID', recording.signId.toString()), _detailRow('Sign Name', recording.signName),
-                    _detailRow('Handedness', recording.handedness), _detailRow('Frames', recording.frameCount.toString()),
+                    _detailRow('Handedness', recording.handedness), _detailRow('Samples', recording.frameCount.toString()),
                     _detailRow('Duration', '${recording.durationMs}ms'), _detailRow('Status', recording.status.name),
                   ]),
                   const Divider(height: 24),
@@ -487,8 +504,10 @@ class _RecordingsScreenState extends State<RecordingsScreen> {
                       }, icon: const Icon(Icons.check), label: const Text('Approve'),
                         style: FilledButton.styleFrom(backgroundColor: AppColors.statusApproved.withValues(alpha: 0.2)))),
                       const SizedBox(width: 12),
-                      Expanded(child: FilledButton.tonalIcon(onPressed: () {
-                        _fb.firestore.collection('recordings').doc(docId).update({'status': 'rejected', 'reviewedAt': DateTime.now().toIso8601String()});
+                      Expanded(child: FilledButton.tonalIcon(onPressed: () async {
+                        await _fb.firestore.collection('recordings').doc(docId).update({'status': 'rejected', 'reviewedAt': DateTime.now().toIso8601String()});
+                        await _recomputeApprovedCount(recording.signId);
+                        if (!ctx.mounted) return;
                         Navigator.of(ctx).pop();
                         if (mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Rejected'), behavior: SnackBarBehavior.floating, duration: Duration(seconds: 1)));
