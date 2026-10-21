@@ -5,6 +5,8 @@ import 'core/themes/color_schemes.dart';
 import 'core/themes/theme_state.dart';
 import 'features/onboarding/splash_screen.dart';
 import 'shared/services/app_settings.dart';
+import 'shared/services/update_service.dart';
+import 'shared/widgets/update_dialog.dart';
 
 class App extends StatefulWidget {
   const App({super.key});
@@ -15,6 +17,7 @@ class App extends StatefulWidget {
 
 class _AppState extends State<App> {
   final _settings = AppSettings();
+  final _navigatorKey = GlobalKey<NavigatorState>();
 
   @override
   void initState() {
@@ -23,6 +26,20 @@ class _AppState extends State<App> {
     _settings.textScale.addListener(_onChanged);
     _settings.colorSchemeId.addListener(_onChanged);
     _settings.language.addListener(_onChanged);
+    Future.delayed(const Duration(seconds: 3), _checkForUpdates);
+  }
+
+  Future<void> _checkForUpdates() async {
+    final result = await UpdateService.instance.check();
+    if (result.status != UpdateCheckStatus.updateAvailable) return;
+    // State.context is ABOVE MaterialApp (no Navigator); the navigator's own
+    // context is the one showDialog can resolve.
+    final navState = _navigatorKey.currentState;
+    final navContext = _navigatorKey.currentContext;
+    if (!mounted || navState == null || !navState.mounted || navContext == null) {
+      return;
+    }
+    await showUpdateDialog(navContext, result.info!);
   }
 
   Locale _resolveLocale() {
@@ -61,6 +78,7 @@ class _AppState extends State<App> {
       child: MaterialApp(
         title: 'iSign',
         debugShowCheckedModeBanner: false,
+        navigatorKey: _navigatorKey,
         theme: AppTheme.light(lightScheme),
         darkTheme: AppTheme.dark(darkScheme),
         themeMode: _settings.themeMode.value,

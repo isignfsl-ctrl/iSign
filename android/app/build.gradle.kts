@@ -21,8 +21,8 @@ android {
         applicationId = "com.isign.app"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = flutter.versionCode.toInt()
+        versionName = flutter.versionName
     }
 
     // Load signing config from key.properties (gitignored) or environment variables

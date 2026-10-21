@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:isign_shared/isign_shared.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import '../../core/themes/color_schemes.dart';
 import '../../core/themes/theme_extensions.dart';
 import '../../data/database/db_helper.dart';
@@ -10,6 +11,8 @@ import '../../data/repositories/training_repository.dart';
 import '../../shared/services/firebase_service.dart';
 import '../../shared/services/catalog_notifier.dart';
 import '../../shared/services/device_registration.dart';
+import '../../shared/services/update_service.dart';
+import '../../shared/widgets/update_dialog.dart';
 import 'evaluation_report_screen.dart';
 import 'submit_feedback_screen.dart';
 import '../training/sign_recorder_screen.dart';
@@ -68,6 +71,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _loadVersions() async {
+    final pkg = await PackageInfo.fromPlatform();
     final db = await DbHelper().database;
 
     final ver = await db.rawQuery('''
@@ -80,8 +84,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
     setState(() {
       _modelVersion =
           ver.isNotEmpty ? ver.first['version_name'] as String : 'FSL-v1.0';
-      _appVersion = '1.0.0';
+      _appVersion = pkg.version;
     });
+  }
+
+  Future<void> _checkUpdates() async {
+    final result = await UpdateService.instance.check(ignoreSkip: true);
+    if (!mounted) return;
+    if (result.status == UpdateCheckStatus.updateAvailable) {
+      await showUpdateDialog(context, result.info!);
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(result.status == UpdateCheckStatus.upToDate
+              ? 'You are using the latest version.'
+              : "Couldn't reach the update server."),
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
   }
 
   Future<void> _syncAll() async {
@@ -798,6 +820,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
               style: TextStyle(color: theme.colorScheme.error)),
           subtitle: const Text('Delete all local signs permanently'),
           onTap: _syncing ? null : _clearLocalSigns,
+        ),
+        const Divider(height: 1, indent: 16, endIndent: 16),
+        ListTile(
+          leading:
+              Icon(Icons.system_update_alt, color: theme.colorScheme.primary),
+          title: const Text('Check for updates'),
+          subtitle: Text(_appVersion == null
+              ? 'Tap to check for a newer version'
+              : 'Current version $_appVersion'),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: _syncing ? null : _checkUpdates,
         ),
       ],
     );
