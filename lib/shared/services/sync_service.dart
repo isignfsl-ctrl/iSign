@@ -84,9 +84,9 @@ class SyncService {
         'submittedAt': DateTime.now().toIso8601String(),
       });
 
-      await _firestore.collection('devices').doc(deviceId).update({
+      await _firestore.collection('devices').doc(deviceId).set({
         'lastSync': DateTime.now().toIso8601String(),
-      });
+      }, SetOptions(merge: true));
 
       _isSyncing = false;
       return SyncResult(success: true, synced: 1);
@@ -163,10 +163,17 @@ class SyncService {
     void Function(int progress, int total)? onProgress,
   }) async {
     if (_isSyncing) return SyncResult(success: false, error: 'Already syncing');
+
+    // Re-check connectivity at call time — the cached flag can be stale if
+    // startMonitoring() hasn't delivered its first event yet.
+    final status = await _connectivity.checkConnectivity();
+    _isConnected = status.any((r) => r != ConnectivityResult.none);
     if (!_isConnected) return SyncResult(success: false, error: 'No internet connection');
 
     _isSyncing = true;
     int synced = 0;
+    final uploadedIds = <int>[];
+    String? firstError;
 
     try {
       final db = await DbHelper().database;
@@ -182,67 +189,75 @@ class SyncService {
         final groupSamples = entry.value;
         if (groupSamples.isEmpty) continue;
 
-        final first = groupSamples.first;
-        final allLandmarks = groupSamples.map((s) => s.landmarks).toList();
-        final timestamp = DateTime.now().millisecondsSinceEpoch;
+        // Each group is independent: one bad group must not block the rest.
+        try {
+          final first = groupSamples.first;
+          final allLandmarks = groupSamples.map((s) => s.landmarks).toList();
+          final timestamp = DateTime.now().millisecondsSinceEpoch;
 
-        // Look up sign name
-        final signRows = await db.query('fsl_signs',
-            columns: ['sign_name'],
-            where: 'id = ?', whereArgs: [first.signId]);
-        final signName = signRows.isNotEmpty
-            ? (signRows.first['sign_name'] as String? ?? '')
-            : '';
+          // Look up sign name
+          final signRows = await db.query('fsl_signs',
+              columns: ['sign_name'],
+              where: 'id = ?', whereArgs: [first.signId]);
+          final signName = signRows.isNotEmpty
+              ? (signRows.first['sign_name'] as String? ?? '')
+              : '';
 
-        // Compute quality scores
-        final quality = _computeQuality(allLandmarks);
+          // Compute quality scores
+          final quality = _computeQuality(allLandmarks);
 
-        final jsonStr = jsonEncode({
-          'signId': first.signId,
-          'handedness': first.handedness,
-          'handIdx': first.handIdx,
-          'frames': allLandmarks,
-          'frameCount': allLandmarks.length,
-          'quality': quality,
-        });
+          // Frames are stored inline in the Firestore document — this project
+          // has no Cloud Storage bucket (billing not enabled).
+          final jsonStr = jsonEncode({
+            'signId': first.signId,
+            'handedness': first.handedness,
+            'handIdx': first.handIdx,
+            'frames': allLandmarks,
+            'frameCount': allLandmarks.length,
+            'quality': quality,
+          });
 
-        final dir = await getTemporaryDirectory();
-        final file = File('${dir.path}/${entry.key}_$timestamp.json');
-        await file.writeAsString(jsonStr);
+          final storagePath = 'recordings/$deviceId/${entry.key}_$timestamp.json';
 
-        final storagePath = 'recordings/$deviceId/${entry.key}_$timestamp.json';
-        await _storage.ref(storagePath).putFile(file);
-        await file.delete();
+          await _firestore.collection('recordings').add({
+            'deviceId': deviceId,
+            'signId': first.signId,
+            'signName': signName,
+            'landmarksPath': storagePath,
+            'framesJson': jsonStr,
+            'handedness': first.handedness,
+            'handIdx': first.handIdx,
+            'frameCount': allLandmarks.length,
+            'durationMs': groupSamples.length * 33,
+            'status': 'pending',
+            'submittedAt': DateTime.now().toIso8601String(),
+            'quality_motionScore': quality['motionScore'],
+            'quality_shapeConsistency': quality['shapeConsistency'],
+          });
 
-        await _firestore.collection('recordings').add({
-          'deviceId': deviceId,
-          'signId': first.signId,
-          'signName': signName,
-          'landmarksPath': storagePath,
-          'handedness': first.handedness,
-          'handIdx': first.handIdx,
-          'frameCount': allLandmarks.length,
-          'durationMs': groupSamples.length * 33,
-          'status': 'pending',
-          'submittedAt': DateTime.now().toIso8601String(),
-          'quality_motionScore': quality['motionScore'],
-          'quality_shapeConsistency': quality['shapeConsistency'],
-        });
-
-        synced++;
+          synced++;
+          uploadedIds.addAll(groupSamples.map((s) => s.id).whereType<int>());
+        } catch (e) {
+          firstError ??= e.toString();
+        }
         onProgress?.call(synced, total);
       }
 
-      await _firestore.collection('devices').doc(deviceId).update({
+      await _firestore.collection('devices').doc(deviceId).set({
         'lastSync': DateTime.now().toIso8601String(),
         'totalUploads': FieldValue.increment(synced),
-      });
+      }, SetOptions(merge: true));
 
       _isSyncing = false;
-      return SyncResult(success: true, synced: synced);
+      if (firstError != null) {
+        return SyncResult(
+            success: false, error: firstError, synced: synced, sampleIds: uploadedIds);
+      }
+      return SyncResult(success: true, synced: synced, sampleIds: uploadedIds);
     } catch (e) {
       _isSyncing = false;
-      return SyncResult(success: false, error: e.toString(), synced: synced);
+      return SyncResult(
+          success: false, error: e.toString(), synced: synced, sampleIds: uploadedIds);
     }
   }
 
@@ -269,24 +284,18 @@ class SyncService {
       for (final doc in snapshot.docs) {
         final data = doc.data();
         final signId = data['signId'] as int?;
-        final landmarksPath = data['landmarksPath'] as String?;
+        final framesJson = data['framesJson'] as String?;
 
-        if (signId == null || landmarksPath == null) continue;
+        if (signId == null || framesJson == null) continue;
 
         // Check if already downloaded
+        final cloudPath = 'recordings/${doc.id}';
         final existing = await db.query('reference_landmarks',
-            where: 'cloud_path = ?', whereArgs: [landmarksPath]);
+            where: 'cloud_path = ?', whereArgs: [cloudPath]);
         if (existing.isNotEmpty) continue;
 
-        // Download from storage
         try {
-          final dir = await getTemporaryDirectory();
-          final file = File('${dir.path}/ref_${DateTime.now().millisecondsSinceEpoch}.json');
-          await _storage.ref(landmarksPath).writeToFile(file);
-          final jsonStr = await file.readAsString();
-          await file.delete();
-
-          final payload = jsonDecode(jsonStr) as Map<String, dynamic>;
+          final payload = jsonDecode(framesJson) as Map<String, dynamic>;
           final frames = payload['frames'] as List<dynamic>?;
           if (frames == null || frames.isEmpty) continue;
 
@@ -305,7 +314,7 @@ class SyncService {
             'handedness': data['handedness'] as String? ?? 'unknown',
             'hand_idx': data['handIdx'] as int? ?? 0,
             'frame_count': frames.length,
-            'cloud_path': landmarksPath,
+            'cloud_path': cloudPath,
           });
 
           // Update training status
@@ -381,5 +390,11 @@ class SyncResult {
   final bool success;
   final int synced;
   final String? error;
-  SyncResult({required this.success, this.synced = 0, this.error});
+  final List<int> sampleIds;
+  SyncResult({
+    required this.success,
+    this.synced = 0,
+    this.error,
+    this.sampleIds = const [],
+  });
 }

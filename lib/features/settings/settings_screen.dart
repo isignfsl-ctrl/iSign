@@ -3,6 +3,7 @@ import 'package:isign_shared/isign_shared.dart';
 import '../../core/themes/color_schemes.dart';
 import '../../core/themes/theme_extensions.dart';
 import '../../data/database/db_helper.dart';
+import '../../data/database/seed_data.dart';
 import '../../shared/services/app_settings.dart';
 import '../../shared/services/sync_service.dart';
 import '../../data/repositories/training_repository.dart';
@@ -71,7 +72,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     final ver = await db.rawQuery('''
       SELECT version_name FROM model_versions
-      WHERE version_name != 'seed_loaded'
+      WHERE version_name NOT IN ('seed_loaded', 'seed_v3', 'cat_repair_v1')
       ORDER BY deployed_at DESC LIMIT 1
     ''');
 
@@ -119,6 +120,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
       }
 
       // Step 1: Upload training samples
+      String? sampleUploadError;
+      int sampleUploaded = 0;
       final rows = await db.query('training_samples', where: 'synced = 0');
       final samples = rows.map((r) => TrainingSample.fromMap(r)).toList();
       if (samples.isNotEmpty) {
@@ -131,12 +134,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
               setState(() => _syncStatus = 'Training: $done of $total groups');
           },
         );
-        if (result.success) {
-          final ids = samples.map((s) => s.id).whereType<int>().toList();
-          if (ids.isNotEmpty) {
-            await db.update('training_samples', {'synced': 1},
-                where: 'id IN (${ids.join(',')})');
-          }
+        sampleUploaded = result.synced;
+        if (!result.success) {
+          sampleUploadError = result.error ?? 'unknown error';
+        }
+        // Mark only the groups that actually made it to Firestore.
+        final okIds = result.sampleIds;
+        if (okIds.isNotEmpty) {
+          await db.update('training_samples', {'synced': 1},
+              where: 'id IN (${okIds.join(',')})');
         }
       }
 
@@ -150,7 +156,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
         final description = sign['description'] as String? ?? '';
         final englishName = sign['english_name'] as String?;
         final englishDescription = sign['english_description'] as String?;
-        final categoryId = (sign['category_id'] as int?) ?? 0;
+        final localCatId = (sign['category_id'] as int?) ?? 0;
+
+        // Normalize to the canonical category ids (0-3) the admin panel
+        // expects — local dbs may carry legacy autoincrement ids.
+        int categoryId = localCatId;
+        if (categoryId < 0 || categoryId >= SeedData.canonicalCategories.length) {
+          final crows =
+              await db.query('categories', where: 'id = ?', whereArgs: [localCatId]);
+          final cname = crows.isNotEmpty
+              ? (crows.first['category_name'] as String? ?? '')
+              : '';
+          categoryId = SeedData.nameToCanonicalId(cname) ?? 0;
+        }
 
         final existing = await fb.firestore
             .collection('catalog')
@@ -165,6 +183,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           'english_name': englishName,
           'english_description': englishDescription,
           'categoryId': categoryId,
+          'categoryName': SeedData.canonicalName(categoryId),
           'version': 1,
           'landmarkSamplePaths': <String>[],
           'updatedAt': DateTime.now().toIso8601String(),
@@ -211,7 +230,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
         // Map cloud category ID to local category ID
         int categoryId = cloudCatId;
-        final catEntry = catNames[cloudCatId];
+        if (categoryId < 0 || categoryId >= SeedData.canonicalCategories.length) {
+          categoryId = SeedData.nameToCanonicalId(
+                  data['categoryName'] as String? ?? '') ??
+              0;
+        }
+        final catEntry = catNames[categoryId];
         if (catEntry != null) {
           final filName = catEntry[0];
           final enName = catEntry[1];
@@ -219,10 +243,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
           if (existingId != null) {
             categoryId = existingId;
           } else {
-            categoryId = await db.insert('categories', {
-              'category_name': filName,
-              'english_name': enName,
-            });
+            final canonId = SeedData.nameToCanonicalId(filName);
+            if (canonId != null) {
+              await db.execute(
+                  'INSERT OR IGNORE INTO categories (id, category_name, english_name) VALUES (?, ?, ?)',
+                  [canonId, filName, enName]);
+              categoryId = canonId;
+            } else {
+              categoryId = await db.insert('categories', {
+                'category_name': filName,
+                'english_name': enName,
+              });
+            }
             catByName[filName] = categoryId;
           }
         }
@@ -266,14 +298,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
       CatalogNotifier.trainingStatusChanged.value++;
 
       if (mounted) {
-        setState(() => _syncStatus = 'Sync complete');
+        setState(() => _syncStatus = sampleUploadError != null
+            ? 'Sync done — sample upload FAILED'
+            : 'Sync complete');
         final dlMsg = downloadResult.success
             ? ', downloaded ${downloadResult.synced} training recordings'
             : '';
+        final sampleMsg = sampleUploadError != null
+            ? ' | Sample upload FAILED: $sampleUploadError'
+            : (sampleUploaded > 0
+                ? ' | Uploaded $sampleUploaded sample group(s)'
+                : '');
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
+              duration: const Duration(seconds: 6),
               content: Text(
-                  'Uploaded $uploaded signs, pulled $added new + $updated updated$dlMsg')),
+                  'Uploaded $uploaded signs, pulled $added new + $updated updated$dlMsg$sampleMsg')),
         );
       }
     } catch (e) {
@@ -710,7 +750,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
       await db.delete('fsl_signs');
       await db.delete('categories');
       await db.delete('model_versions',
-          where: 'version_name = ?', whereArgs: ['seed_v3']);
+          where: 'version_name IN (?, ?)',
+          whereArgs: ['seed_v3', 'cat_repair_v1']);
 
       CatalogNotifier.catalogCleared.value++;
 

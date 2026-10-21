@@ -1,14 +1,24 @@
 import 'package:flutter/material.dart';
 import 'app.dart';
+import 'data/database/db_helper.dart';
+import 'data/database/seed_data.dart';
 import 'shared/services/app_settings.dart';
 import 'shared/services/firebase_service.dart';
 import 'shared/services/device_registration.dart';
+import 'shared/services/training_upload_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   // Load persisted settings
   await AppSettings().load();
+
+  // One-time category repair (canonical ids 0-3, non-destructive)
+  try {
+    await SeedData().repairCategories(await DbHelper().database);
+  } catch (_) {
+    // Best-effort — sync normalizes categories as well
+  }
 
   // Try to initialize Firebase; graceful failure if not configured
   final fs = FirebaseService();
@@ -18,6 +28,13 @@ void main() async {
     _registerDevice(fs);
   } catch (_) {
     // Firebase not configured — app works offline
+  }
+
+  // Enable background training-sample uploads (best-effort)
+  try {
+    await TrainingUploadService.initialize();
+  } catch (_) {
+    // WorkManager unavailable — manual sync still works
   }
 
   runApp(const App());

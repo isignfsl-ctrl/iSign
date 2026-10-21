@@ -1,6 +1,5 @@
 import 'dart:convert';
 
-import 'package:firebase_storage/firebase_storage.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:workmanager/workmanager.dart';
@@ -13,7 +12,6 @@ class TrainingUploadService {
   static const String _workName = 'trainingUploadTask';
   static const int _batchSize = 10;
 
-  final FirebaseStorage _storage = FirebaseStorage.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
@@ -85,32 +83,32 @@ class TrainingUploadService {
     await batch.commit(noResult: true);
   }
 
-  /// Upload landmarks to Firebase Storage and create Firestore document
+  /// Upload landmarks and create Firestore document
   Future<bool> _uploadSample(TrainingSample sample) async {
     try {
       final user = _auth.currentUser;
       if (user == null) return false;
 
-      // 1. Upload landmarks JSON to Firebase Storage
-      final landmarksJson = jsonEncode(sample.landmarks);
-      final fileName = 'recordings/${user.uid}/${sample.signId}_${sample.recordedAt?.millisecondsSinceEpoch ?? DateTime.now().millisecondsSinceEpoch}.json';
-      final ref = _storage.ref().child(fileName);
-      
-      final uploadTask = ref.putString(
-        landmarksJson,
-        format: PutStringFormat.raw,
-        metadata: SettableMetadata(contentType: 'application/json'),
-      );
-      
-      await uploadTask;
-      final downloadUrl = await ref.getDownloadURL();
+      // Frames are stored inline in the Firestore document — this project
+      // has no Cloud Storage bucket (billing not enabled).
+      final payload = jsonEncode({
+        'signId': sample.signId,
+        'handedness': sample.handedness,
+        'handIdx': sample.handIdx,
+        'frames': [sample.landmarks],
+        'frameCount': 1,
+        'quality': {'motionScore': 0.0, 'shapeConsistency': 1.0},
+      });
+      final logicalPath =
+          'recordings/${user.uid}/${sample.signId}_${sample.recordedAt?.millisecondsSinceEpoch ?? DateTime.now().millisecondsSinceEpoch}.json';
 
-      // 2. Create Firestore document (unified 'recordings' collection)
+      // Create Firestore document (unified 'recordings' collection)
       await _firestore.collection('recordings').add({
         'deviceId': user.uid,
         'signId': sample.signId,
         'signName': sample.userName ?? 'Unknown',
-        'landmarksPath': downloadUrl,
+        'landmarksPath': logicalPath,
+        'framesJson': payload,
         'handedness': sample.handedness,
         'handIdx': sample.handIdx,
         'frameCount': sample.landmarks.length ~/ 63,
@@ -199,13 +197,18 @@ class TrainingUploadService {
 
   /// Manually trigger sync (called after recording)
   Future<void> scheduleUpload() async {
-    await Workmanager().registerOneOffTask(
-      'trainingUploadTask',
-      'trainingUploadTask',
-      constraints: Constraints(
-        networkType: NetworkType.connected,
-      ),
-    );
+    try {
+      await Workmanager().registerOneOffTask(
+        'trainingUploadTask',
+        'trainingUploadTask',
+        constraints: Constraints(
+          networkType: NetworkType.connected,
+        ),
+      );
+    } catch (_) {
+      // WorkManager not initialized (e.g. synchronous failure) — the manual
+      // Settings sync and the periodic task will pick the samples up instead.
+    }
   }
 
   /// Get last sync timestamp
