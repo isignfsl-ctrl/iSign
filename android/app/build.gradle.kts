@@ -35,7 +35,7 @@ android {
 
     signingConfigs {
         create("release") {
-            storeFile = if (hasKeyProps) file(keyProps["storeFile"] as String) else file("key.jks")
+            storeFile = if (hasKeyProps) rootProject.file(keyProps["storeFile"] as String) else rootProject.file("key.jks")
             storePassword = if (hasKeyProps) keyProps["storePassword"] as String else (System.getenv("KEYSTORE_PASSWORD") ?: "isign123")
             keyAlias = if (hasKeyProps) keyProps["keyAlias"] as String else (System.getenv("KEY_ALIAS") ?: "isign")
             keyPassword = if (hasKeyProps) keyProps["keyPassword"] as String else (System.getenv("KEY_PASSWORD") ?: "isign123")
