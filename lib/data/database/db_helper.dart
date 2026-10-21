@@ -27,7 +27,7 @@ class DbHelper {
   }
 
   Future<void> _onCreate(Database db, int version) async {
-    await db.execute('''''
+    await db.execute('''
       CREATE TABLE users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL,
@@ -36,7 +36,7 @@ class DbHelper {
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
       )
     ''');
-    await db.execute('''''
+    await db.execute('''
       CREATE TABLE categories (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         category_name TEXT NOT NULL,
@@ -44,14 +44,14 @@ class DbHelper {
       )
     ''');
     // Seed categories table with default data matching admin panel mapping
-    await db.execute('''''
+    await db.execute('''
       INSERT INTO categories (id, category_name, english_name) VALUES
       (0, 'Alpabeto', 'Alphabet'),
       (1, 'Mga Karaniwang Parirala', 'Common Phrases'),
       (2, 'Mga Bilang', 'Numbers'),
       (3, 'Mga Pangunahing Galaw', 'Basic Gestures')
     ''');
-    await db.execute('''''
+    await db.execute('''
       CREATE TABLE fsl_signs (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         sign_name TEXT NOT NULL,
@@ -64,7 +64,7 @@ class DbHelper {
         FOREIGN KEY (category_id) REFERENCES categories(id)
       )
     ''');
-    await db.execute('''''
+    await db.execute('''
       CREATE TABLE sign_media (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         sign_id INTEGER NOT NULL,
@@ -74,7 +74,7 @@ class DbHelper {
         FOREIGN KEY (sign_id) REFERENCES fsl_signs(id)
       )
     ''');
-    await db.execute('''''
+    await db.execute('''
       CREATE TABLE translations (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id INTEGER,
@@ -84,7 +84,7 @@ class DbHelper {
         FOREIGN KEY (user_id) REFERENCES users(id)
       )
     ''');
-    await db.execute('''''
+    await db.execute('''
       CREATE TABLE translation_details (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         translation_id INTEGER NOT NULL,
@@ -96,7 +96,7 @@ class DbHelper {
         FOREIGN KEY (sign_id) REFERENCES fsl_signs(id)
       )
     ''');
-    await db.execute('''''
+    await db.execute('''
       CREATE TABLE recordings (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id INTEGER,
@@ -107,7 +107,7 @@ class DbHelper {
         FOREIGN KEY (user_id) REFERENCES users(id)
       )
     ''');
-    await db.execute('''''
+    await db.execute('''
       CREATE TABLE feedback (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id INTEGER,
@@ -119,7 +119,7 @@ class DbHelper {
         FOREIGN KEY (sign_id) REFERENCES fsl_signs(id)
       )
     ''');
-    await db.execute('''''
+    await db.execute('''
       CREATE TABLE model_versions (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         version_name TEXT NOT NULL,
@@ -127,7 +127,7 @@ class DbHelper {
         deployed_at DATETIME DEFAULT CURRENT_TIMESTAMP
       )
     ''');
-    await db.execute('''''
+    await db.execute('''
       CREATE TABLE evaluation_logs (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         translation_id INTEGER,
@@ -141,7 +141,7 @@ class DbHelper {
         FOREIGN KEY (translation_id) REFERENCES translations(id)
       )
     ''');
-    await db.execute('''''
+    await db.execute('''
       CREATE TABLE training_samples (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         sign_id INTEGER NOT NULL,
@@ -153,7 +153,7 @@ class DbHelper {
         FOREIGN KEY (sign_id) REFERENCES fsl_signs(id)
       )
     ''');
-    await db.execute('''''
+    await db.execute('''
       CREATE TABLE reference_landmarks (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         sign_id INTEGER NOT NULL,
@@ -166,7 +166,7 @@ class DbHelper {
         FOREIGN KEY (sign_id) REFERENCES fsl_signs(id)
       )
     ''');
-    await db.execute('''''
+    await db.execute('''
       CREATE TABLE settings (
         key TEXT PRIMARY KEY,
         value TEXT NOT NULL
@@ -176,7 +176,7 @@ class DbHelper {
 
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
     if (oldVersion < 2) {
-      await db.execute('''''
+      await db.execute('''
         CREATE TABLE IF NOT EXISTS training_samples (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           sign_id INTEGER NOT NULL,
@@ -187,34 +187,34 @@ class DbHelper {
       ''');
     }
     if (oldVersion < 3) {
-      await db.execute('''''
+      await db.execute('''
         ALTER TABLE training_samples ADD COLUMN handedness TEXT DEFAULT 'unknown'
       ''');
-      await db.execute('''''
+      await db.execute('''
         ALTER TABLE training_samples ADD COLUMN hand_idx INTEGER DEFAULT 0
       ''');
     }
     if (oldVersion < 4) {
-      await db.execute('''''
+      await db.execute('''
         ALTER TABLE training_samples ADD COLUMN synced INTEGER DEFAULT 0
       ''');
     }
     if (oldVersion < 5) {
-      await db.execute('''''
+      await db.execute('''
         ALTER TABLE categories ADD COLUMN english_name TEXT
       ''');
-      await db.execute('''''
+      await db.execute('''
         ALTER TABLE fsl_signs ADD COLUMN english_name TEXT
       ''');
-      await db.execute('''''
+      await db.execute('''
         ALTER TABLE fsl_signs ADD COLUMN english_description TEXT
       ''');
     }
     if (oldVersion < 6) {
-      await db.execute('''''
+      await db.execute('''
         ALTER TABLE fsl_signs ADD COLUMN training_status TEXT DEFAULT 'untrained'
       ''');
-      await db.execute('''''
+      await db.execute('''
         CREATE TABLE IF NOT EXISTS reference_landmarks (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           sign_id INTEGER NOT NULL,
@@ -229,7 +229,7 @@ class DbHelper {
       ''');
     }
     if (oldVersion < 7) {
-      await db.execute('''''
+      await db.execute('''
         CREATE TABLE IF NOT EXISTS settings (
           key TEXT PRIMARY KEY,
           value TEXT NOT NULL
@@ -237,14 +237,14 @@ class DbHelper {
       ''');
     }
     if (oldVersion < 8) {
-      await db.execute('''''
+      await db.execute('''
         ALTER TABLE users ADD COLUMN user_name TEXT
       ''');
-      await db.execute('''''
+      await db.execute('''
         ALTER TABLE training_samples ADD COLUMN user_name TEXT
       ''');
       // Seed categories table with default data matching admin panel mapping
-      await db.execute('''''
+      await db.execute('''
         INSERT OR IGNORE INTO categories (id, category_name, english_name) VALUES
         (0, 'Alpabeto', 'Alphabet'),
         (1, 'Mga Karaniwang Parirala', 'Common Phrases'),
