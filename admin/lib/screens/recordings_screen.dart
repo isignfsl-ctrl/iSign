@@ -10,6 +10,7 @@ import '../widgets/status_badge.dart';
 import '../widgets/search_filter_bar.dart';
 import '../widgets/empty_state_widget.dart';
 import '../widgets/skeleton_loader.dart';
+import '../widgets/recording_preview.dart';
 
 class RecordingsScreen extends StatefulWidget {
   const RecordingsScreen({super.key});
@@ -225,7 +226,10 @@ class _RecordingsScreenState extends State<RecordingsScreen> {
                   final data = d.data() as Map<String, dynamic>;
                   final name = (data['signName'] as String? ?? '').toLowerCase();
                   final device = (data['deviceId'] as String? ?? '').toLowerCase();
-                  return name.contains(_searchQuery) || device.contains(_searchQuery);
+                  final signId = data['signId']?.toString() ?? '';
+                  return name.contains(_searchQuery) ||
+                      device.contains(_searchQuery) ||
+                      signId.contains(_searchQuery);
                 }).toList();
               }
 
@@ -297,7 +301,7 @@ class _RecordingsScreenState extends State<RecordingsScreen> {
                     child: InkWell(
                       onTap: () {
                         if (_selectMode) { _toggleSelection(doc.id); }
-                        else { _showDetail(context, recording, doc.id); }
+                        else { _showDetail(context, recording, doc.id, data); }
                       },
                       child: Padding(
                         padding: const EdgeInsets.all(16),
@@ -311,7 +315,7 @@ class _RecordingsScreenState extends State<RecordingsScreen> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Row(children: [
-                                    Text(recording.signName, style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+                                    Text(_signLabel(recording), style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
                                     const SizedBox(width: 8),
                                     if (recording.motionScore != null) _qualityBadge(recording.motionScore!),
                                   ]),
@@ -321,7 +325,22 @@ class _RecordingsScreenState extends State<RecordingsScreen> {
                                 ],
                               ),
                             ),
-                            if (!_selectMode) StatusBadge(recording.status.name),
+                            if (!_selectMode)
+                              Row(mainAxisSize: MainAxisSize.min, children: [
+                                IconButton(
+                                  visualDensity: VisualDensity.compact,
+                                  icon: const Icon(Icons.play_circle_outline, size: 22),
+                                  tooltip: 'Preview hand frames',
+                                  onPressed: () => showRecordingPreview(
+                                    context,
+                                    framesJson: data['framesJson'] as String?,
+                                    title: _signLabel(recording),
+                                    subtitle: '${recording.deviceId} · ${recording.status.name}',
+                                  ),
+                                ),
+                                const SizedBox(width: 4),
+                                StatusBadge(recording.status.name),
+                              ]),
                           ],
                         ),
                       ),
@@ -400,7 +419,10 @@ class _RecordingsScreenState extends State<RecordingsScreen> {
     }
   }
 
-  void _showDetail(BuildContext context, RecordingMetadata recording, String docId) {
+  String _signLabel(RecordingMetadata r) =>
+      r.signName.isEmpty ? 'Sign #${r.signId}' : r.signName;
+
+  void _showDetail(BuildContext context, RecordingMetadata recording, String docId, Map<String, dynamic> data) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -418,10 +440,12 @@ class _RecordingsScreenState extends State<RecordingsScreen> {
                   Center(child: Container(width: 32, height: 4, decoration: BoxDecoration(color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.3), borderRadius: BorderRadius.circular(2)))),
                   const SizedBox(height: 16),
                   Row(children: [
-                    Expanded(child: Text(recording.signName, style: theme.textTheme.titleLarge)),
+                    Expanded(child: Text(_signLabel(recording), style: theme.textTheme.titleLarge)),
                     StatusBadge(recording.status.name), const SizedBox(width: 8),
                     IconButton(icon: const Icon(Icons.close, size: 20), onPressed: () => Navigator.of(ctx).pop()),
                   ]),
+                  const SizedBox(height: 16),
+                  RecordingPreview(framesJson: data['framesJson'] as String?, height: 300),
                   const SizedBox(height: 16),
                   _section('Recording Info', [
                     _detailRow('Sign ID', recording.signId.toString()), _detailRow('Sign Name', recording.signName),

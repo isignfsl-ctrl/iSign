@@ -7,7 +7,7 @@ import '../theme/app_theme.dart';
 import '../widgets/status_badge.dart';
 import '../widgets/search_filter_bar.dart';
 import '../widgets/empty_state_widget.dart';
-import '../widgets/skeleton_loader.dart';
+import '../widgets/recording_preview.dart';
 
 class PendingSignsScreen extends StatefulWidget {
   const PendingSignsScreen({super.key});
@@ -91,8 +91,6 @@ class _PendingSignsScreenState extends State<PendingSignsScreen> {
     final doc = await _fb.firestore.collection('recordings').doc(docId).get();
     final data = doc.data();
     if (data == null) return;
-    final signId = data['signId'] as int?;
-    final landmarksPath = data['landmarksPath'] as String?;
 
     // Update recording status
     await _fb.firestore.collection('recordings').doc(docId).update({
@@ -254,7 +252,11 @@ class _PendingSignsScreenState extends State<PendingSignsScreen> {
               itemBuilder: (context, index) {
                 final doc = filteredDocs[index];
                 final data = doc.data() as Map<String, dynamic>;
-                final signName = data['signName'] as String? ?? 'Unknown';
+                var signName = data['signName'] as String? ?? '';
+                if (signName.isEmpty) {
+                  final sid = data['signId'] as int?;
+                  signName = sid != null ? 'Sign #$sid' : 'Unknown';
+                }
                 final deviceId = data['deviceId'] as String? ?? 'Unknown';
                 final submittedAt = data['submittedAt'] as String?;
                 final signId = data['signId'] as int?;
@@ -288,7 +290,11 @@ class _PendingSignsScreenState extends State<PendingSignsScreen> {
             itemBuilder: (context, index) {
               final doc = filteredDocs[index];
               final data = doc.data() as Map<String, dynamic>;
-              final signName = data['signName'] as String? ?? 'Unknown';
+              var signName = data['signName'] as String? ?? '';
+              if (signName.isEmpty) {
+                final sid = data['signId'] as int?;
+                signName = sid != null ? 'Sign #$sid' : 'Unknown';
+              }
               final deviceId = data['deviceId'] as String? ?? 'Unknown';
               final submittedAt = data['submittedAt'] as String?;
               final signId = data['signId'] as int?;
@@ -430,10 +436,11 @@ class _PendingSignsScreenState extends State<PendingSignsScreen> {
   }
 
   void _showDetailsDialog(String docId, Map<String, dynamic> data) {
-    final signName = data['signName'] as String? ?? 'Unknown';
+    final signId = data['signId'] as int?;
+    var signName = data['signName'] as String? ?? '';
+    if (signName.isEmpty) signName = signId != null ? 'Sign #$signId' : 'Unknown';
     final deviceId = data['deviceId'] as String? ?? 'Unknown';
     final submittedAt = data['submittedAt'] as String?;
-    final signId = data['signId'] as int?;
     final handedness = data['handedness'] as String? ?? 'unknown';
     final frameCount = data['frameCount'] as int? ?? 0;
     final durationMs = data['durationMs'] as int? ?? 0;
@@ -447,6 +454,8 @@ class _PendingSignsScreenState extends State<PendingSignsScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
+              RecordingPreview(framesJson: data['framesJson'] as String?, height: 260),
+              const SizedBox(height: 16),
               Text('Device: $deviceId', style: Theme.of(ctx).textTheme.bodyMedium),
               const SizedBox(height: 8),
               Text('Sign ID: $signId', style: Theme.of(ctx).textTheme.bodyMedium),
