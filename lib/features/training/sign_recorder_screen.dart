@@ -213,15 +213,25 @@ class _SignRecorderScreenState extends State<SignRecorderScreen> {
             (h == 0) ? _mediaPipe.lastHandedness : _mediaPipe.lastHandedness2;
         if (handedness.isEmpty) continue;
 
+        // Burst capture. Two invariants keep the counter pinned to the target:
+        //  1. never append once the buffer is full, and
+        //  2. _saveBurst() flips _isBursting synchronously (before its first
+        //     await), so no further frames are accepted while the SQLite write
+        //     is still in flight. Previously the flag only flipped after the
+        //     await, so on fast/release builds extra frames kept landing and
+        //     the progress ran past 30 (e.g. "Recording 47/30...").
         if (_isBursting) {
-          _burstFrames
-              .add({'frame': frame, 'handedness': handedness, 'handIdx': h});
-          final progress = _burstFrames.length;
-          if (mounted) {
-            setState(() => _burstProgress = progress);
+          if (_burstFrames.length < _burstTarget) {
+            _burstFrames
+                .add({'frame': frame, 'handedness': handedness, 'handIdx': h});
+            final progress = _burstFrames.length;
+            if (mounted) {
+              setState(() => _burstProgress = progress);
+            }
           }
-          if (progress >= _burstTarget) {
+          if (_burstFrames.length >= _burstTarget) {
             _saveBurst();
+            break; // target reached — stop consuming this frame's hands
           }
         }
 
@@ -268,7 +278,7 @@ class _SignRecorderScreenState extends State<SignRecorderScreen> {
 
   Future<void> _captureSample() async {
     if (_selectedSignId == null) return;
-    if (_isBursting) return;
+    if (_isBursting || _isSaving) return;
     _burstFrames.clear();
     setState(() {
       _isBursting = true;
@@ -277,40 +287,53 @@ class _SignRecorderScreenState extends State<SignRecorderScreen> {
   }
 
   Future<void> _saveBurst() async {
+    // Idempotent guard: the per-hand loop can attempt this more than once, but
+    // only a single save may ever run.
+    if (!_isBursting || _isSaving) return;
     if (_burstFrames.length < _burstTarget) return;
-    setState(() => _isSaving = true);
 
-    final data = <double>[];
-    String? savedHandedness;
-    int? savedHandIdx;
-    for (final item in _burstFrames) {
-      data.addAll(item['frame'] as List<double>);
-      if (savedHandedness == null) {
-        savedHandedness = item['handedness'] as String?;
-        savedHandIdx = item['handIdx'] as int?;
-      }
-    }
-
-    final userName = AppSettings().userName.value.isNotEmpty
-        ? AppSettings().userName.value
-        : null;
-
-    await _repo.insertSample(TrainingSample(
-      signId: _selectedSignId!,
-      landmarks: data,
-      handedness: savedHandedness ?? 'unknown',
-      handIdx: savedHandIdx ?? 0,
-      userName: userName,
-    ));
-
-    setState(() {
-      _isBursting = false;
-      _burstProgress = 0;
-      _isSaving = false;
-    });
+    // Stop capturing BEFORE any async work. Everything up to the first await
+    // runs synchronously, so _isBursting is already false (and the buffer
+    // drained) by the time _processFrame's `finally` reopens the frame gate —
+    // that's what stops the progress counter at exactly the target.
+    final frames =
+        List<Map<String, dynamic>>.from(_burstFrames.take(_burstTarget));
     _burstFrames.clear();
-    await _loadSampleCount();
-    await _loadCounts();
+    _isBursting = false;
+    _burstProgress = 0;
+    _isSaving = true;
+    if (mounted) setState(() {});
+
+    try {
+      final data = <double>[];
+      String? savedHandedness;
+      int? savedHandIdx;
+      for (final item in frames) {
+        data.addAll(item['frame'] as List<double>);
+        if (savedHandedness == null) {
+          savedHandedness = item['handedness'] as String?;
+          savedHandIdx = item['handIdx'] as int?;
+        }
+      }
+
+      final userName = AppSettings().userName.value.isNotEmpty
+          ? AppSettings().userName.value
+          : null;
+
+      await _repo.insertSample(TrainingSample(
+        signId: _selectedSignId!,
+        landmarks: data,
+        handedness: savedHandedness ?? 'unknown',
+        handIdx: savedHandIdx ?? 0,
+        userName: userName,
+      ));
+    } finally {
+      if (mounted) {
+        setState(() => _isSaving = false);
+      }
+      await _loadSampleCount();
+      await _loadCounts();
+    }
   }
 
   // --- Continuous mode (NEW) ---

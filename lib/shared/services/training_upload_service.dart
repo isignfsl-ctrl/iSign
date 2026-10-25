@@ -6,6 +6,7 @@ import 'package:workmanager/workmanager.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../data/database/db_helper.dart';
+import 'device_registration.dart';
 import 'package:isign_shared/isign_shared.dart';
 
 class TrainingUploadService {
@@ -89,6 +90,11 @@ class TrainingUploadService {
       final user = _auth.currentUser;
       if (user == null) return false;
 
+      // Must match the ID used by DeviceRegistration / manual sync, otherwise
+      // recordings uploaded in the background land on a different key than the
+      // `devices/<id>` doc and the admin's trust counts never increment.
+      final deviceId = await DeviceRegistration().getDeviceId();
+
       // Frames are stored inline in the Firestore document — this project
       // has no Cloud Storage bucket (billing not enabled).
       final payload = jsonEncode({
@@ -100,11 +106,11 @@ class TrainingUploadService {
         'quality': {'motionScore': 0.0, 'shapeConsistency': 1.0},
       });
       final logicalPath =
-          'recordings/${user.uid}/${sample.signId}_${sample.recordedAt?.millisecondsSinceEpoch ?? DateTime.now().millisecondsSinceEpoch}.json';
+          'recordings/$deviceId/${sample.signId}_${sample.recordedAt?.millisecondsSinceEpoch ?? DateTime.now().millisecondsSinceEpoch}.json';
 
       // Create Firestore document (unified 'recordings' collection)
       await _firestore.collection('recordings').add({
-        'deviceId': user.uid,
+        'deviceId': deviceId,
         'signId': sample.signId,
         'signName': sample.userName ?? 'Unknown',
         'landmarksPath': logicalPath,
@@ -186,6 +192,20 @@ class TrainingUploadService {
 
     // Mark successfully uploaded samples as synced
     await markSamplesSynced(successfulSamples);
+
+    // Roll this background batch up onto the device's activity record so the
+    // admin panel's "most active" ranking includes WorkManager uploads too.
+    if (successfulSamples.isNotEmpty) {
+      try {
+        final deviceId = await DeviceRegistration().getDeviceId();
+        final now = DateTime.now().toIso8601String();
+        await _firestore.collection('devices').doc(deviceId).set({
+          'lastSync': now,
+          'lastActive': now,
+          'totalUploads': FieldValue.increment(successfulSamples.length),
+        }, SetOptions(merge: true));
+      } catch (_) {}
+    }
 
     // Update last sync timestamp
     final prefs = await SharedPreferences.getInstance();

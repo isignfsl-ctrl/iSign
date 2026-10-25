@@ -168,6 +168,9 @@ class _DevicesScreenState extends State<DevicesScreen> {
     final status = data['status'] as String? ?? 'unknown';
     final lastSync = data['lastSync'] as String? ?? '';
     final registeredAt = data['registeredAt'] as String? ?? '';
+    final activeSessions = data['activeSessions'] as int? ?? 0;
+    final totalUploads = data['totalUploads'] as int? ?? 0;
+    final lastActive = data['lastActive'] as String? ?? '';
     final approvedCount = data['trust_approvedCount'] as int? ?? 0;
     final rejectedCount = data['trust_rejectedCount'] as int? ?? 0;
     final trustScore = approvedCount + rejectedCount > 0
@@ -238,6 +241,25 @@ class _DevicesScreenState extends State<DevicesScreen> {
                 if (registeredAt.isNotEmpty) Text('Joined: ${registeredAt.length > 10 ? registeredAt.substring(0, 10) : registeredAt}', style: theme.textTheme.labelSmall?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
               ],
             ),
+            if (activeSessions > 0 || totalUploads > 0)
+              Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Row(children: [
+                  Icon(Icons.trending_up,
+                      size: 13, color: theme.colorScheme.primary),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Text(
+                      '$activeSessions sessions · $totalUploads uploads'
+                      '${lastActive.isNotEmpty ? ' · active ${_relativeTime(lastActive)}' : ''}',
+                      style: theme.textTheme.labelSmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                          fontWeight: FontWeight.w600),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ]),
+              ),
             if (trustScore != null) ...[
               const SizedBox(height: 4),
               Row(children: [

@@ -149,7 +149,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       if (samples.isNotEmpty) {
         final result = await _syncService.batchSyncTrainingSamples(
           samples: samples,
-          deviceId: 'device_${user.uid.hashCode.toRadixString(16)}',
+          deviceId: await DeviceRegistration().getDeviceId(),
           uid: user.uid,
           onProgress: (done, total) {
             if (mounted)

@@ -5,6 +5,7 @@ import 'core/themes/color_schemes.dart';
 import 'core/themes/theme_state.dart';
 import 'features/onboarding/splash_screen.dart';
 import 'shared/services/app_settings.dart';
+import 'shared/services/device_registration.dart';
 import 'shared/services/update_service.dart';
 import 'shared/widgets/update_dialog.dart';
 
@@ -15,18 +16,28 @@ class App extends StatefulWidget {
   State<App> createState() => _AppState();
 }
 
-class _AppState extends State<App> {
+class _AppState extends State<App> with WidgetsBindingObserver {
   final _settings = AppSettings();
   final _navigatorKey = GlobalKey<NavigatorState>();
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _settings.themeMode.addListener(_onChanged);
     _settings.textScale.addListener(_onChanged);
     _settings.colorSchemeId.addListener(_onChanged);
     _settings.language.addListener(_onChanged);
     Future.delayed(const Duration(seconds: 3), _checkForUpdates);
+  }
+
+  /// Stamp `lastActive` whenever the app returns to the foreground so the
+  /// admin panel can rank devices by real usage, not just cold launches.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      DeviceRegistration().touchActivity();
+    }
   }
 
   Future<void> _checkForUpdates() async {
@@ -52,6 +63,7 @@ class _AppState extends State<App> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _settings.themeMode.removeListener(_onChanged);
     _settings.textScale.removeListener(_onChanged);
     _settings.colorSchemeId.removeListener(_onChanged);

@@ -25,7 +25,7 @@ void main() async {
   try {
     await fs.initialize();
     await _signInAnonymously(fs);
-    _registerDevice(fs);
+    await _registerDevice(fs);
   } catch (_) {
     // Firebase not configured — app works offline
   }
@@ -50,12 +50,13 @@ Future<void> _signInAnonymously(FirebaseService fs) async {
   }
 }
 
-void _registerDevice(FirebaseService fs) {
+Future<void> _registerDevice(FirebaseService fs) async {
   try {
     final user = fs.auth.currentUser;
     if (user == null) return;
-    final deviceId = 'device_${user.uid.hashCode.toRadixString(16)}';
-    DeviceRegistration().registerDevice(deviceId, 'Realme RMX3686');
+    // Stable install-scoped ID + real hardware model — no hardcoded device
+    // name, no per-launch duplicate documents in the admin panel.
+    await DeviceRegistration().registerDevice();
   } catch (_) {
     // Device registration is best-effort
   }
