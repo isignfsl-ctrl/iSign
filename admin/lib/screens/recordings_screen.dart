@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:isign_shared/isign_shared.dart';
 import '../services/admin_firebase_service.dart';
+import '../services/catalog_sync.dart';
 import '../theme/app_theme.dart';
 import '../widgets/status_badge.dart';
 import '../widgets/search_filter_bar.dart';
@@ -111,7 +112,7 @@ class _RecordingsScreenState extends State<RecordingsScreen> {
 
     // Update catalog entry (sample count, idempotent)
     if (signId != null) {
-      await _recomputeApprovedCount(signId);
+      await _recomputeApprovedCount(signId, data['signName'] as String?);
     }
 
     // Update device trust
@@ -130,25 +131,13 @@ class _RecordingsScreenState extends State<RecordingsScreen> {
   /// SAMPLES contained in its approved recordings. Both approve and reject
   /// funnel through here instead of incrementing, so the value stays correct
   /// even when a recording's status changes more than once.
-  Future<void> _recomputeApprovedCount(int signId) async {
-    final snap = await _fb.firestore
-        .collection('recordings')
-        .where('signId', isEqualTo: signId)
-        .where('status', isEqualTo: 'approved')
-        .get();
-    var total = 0;
-    for (final d in snap.docs) {
-      final fc = (d.data()['frameCount'] as num?)?.toInt();
-      total += (fc != null && fc > 0) ? fc : 1;
-    }
-    final cat = await _fb.firestore
-        .collection('catalog')
-        .where('signId', isEqualTo: signId)
-        .limit(1)
-        .get();
-    if (cat.docs.isNotEmpty) {
-      await cat.docs.first.reference.update({'approvedSampleCount': total});
-    }
+  ///
+  /// Matching is delegated to [CatalogSync], which resolves the catalog entry
+  /// by signId **or** sign name — the recording and catalog id spaces differ,
+  /// so an id-only lookup silently updated nothing.
+  Future<void> _recomputeApprovedCount(int signId, [String? signName]) {
+    return CatalogSync.recomputeApprovedCount(_fb.firestore,
+        signId: signId, signName: signName);
   }
 
   void _exportCsv(List<QueryDocumentSnapshot> allDocs) {

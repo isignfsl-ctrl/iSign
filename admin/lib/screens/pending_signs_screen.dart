@@ -3,6 +3,7 @@ import 'dart:ui' show PlatformDispatcher;
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../services/admin_firebase_service.dart';
+import '../services/catalog_sync.dart';
 import '../theme/app_theme.dart';
 import '../widgets/status_badge.dart';
 import '../widgets/search_filter_bar.dart';
@@ -68,6 +69,16 @@ class _PendingSignsScreenState extends State<PendingSignsScreen> {
         await _onApprove(id);
       }
     } else {
+      // Collect the affected signs so their catalog counters can be refreshed
+      // after the batch lands (rejecting removes approved samples too).
+      final affected = <(int?, String?)>{};
+      for (final id in _selectedIds) {
+        final d = await _fb.firestore.collection('recordings').doc(id).get();
+        final data = d.data();
+        if (data != null) {
+          affected.add((data['signId'] as int?, data['signName'] as String?));
+        }
+      }
       final batch = _fb.firestore.batch();
       for (final id in _selectedIds) {
         batch.update(_fb.firestore.collection('recordings').doc(id), {
@@ -77,6 +88,10 @@ class _PendingSignsScreenState extends State<PendingSignsScreen> {
         });
       }
       await batch.commit();
+      for (final (sid, sname) in affected) {
+        await CatalogSync.recomputeApprovedCount(_fb.firestore,
+            signId: sid, signName: sname);
+      }
     }
     if (mounted) {
       setState(() { _selectedIds.clear(); _selectMode = false; });
@@ -98,6 +113,11 @@ class _PendingSignsScreenState extends State<PendingSignsScreen> {
       'approvedAt': DateTime.now().toIso8601String(),
       'approvedBy': 'admin',
     });
+
+    // Keep the catalog's approved-sample counter truthful — approving from
+    // this screen used to skip it entirely.
+    await CatalogSync.recomputeApprovedCount(_fb.firestore,
+        signId: data['signId'] as int?, signName: data['signName'] as String?);
 
     // Update device trust
     try {

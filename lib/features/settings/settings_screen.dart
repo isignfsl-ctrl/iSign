@@ -84,7 +84,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
     setState(() {
       _modelVersion =
           ver.isNotEmpty ? ver.first['version_name'] as String : 'FSL-v1.0';
-      _appVersion = pkg.version;
+      // Include the build number: the update logic compares build numbers
+      // (not the version name), so users need it to confirm they're current.
+      _appVersion = '${pkg.version}+${pkg.buildNumber}';
     });
   }
 

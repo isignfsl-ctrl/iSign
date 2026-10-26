@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:isign_shared/isign_shared.dart' show RecordingStatus, UserRecording;
 import '../services/admin_firebase_service.dart';
+import '../services/catalog_sync.dart';
 import '../theme/app_theme.dart';
 import '../widgets/status_badge.dart';
 import '../widgets/search_filter_bar.dart';
@@ -69,6 +70,16 @@ class _UserRecordingsScreenState extends State<UserRecordingsScreen> {
         await _onApprove(id);
       }
     } else {
+      // Collect the affected signs so their catalog counters can be refreshed
+      // after the batch lands (rejecting removes approved samples too).
+      final affected = <(int?, String?)>{};
+      for (final id in _selectedIds) {
+        final d = await _fb.firestore.collection('user_recordings').doc(id).get();
+        final data = d.data();
+        if (data != null) {
+          affected.add((data['signId'] as int?, data['signName'] as String?));
+        }
+      }
       final batch = _fb.firestore.batch();
       for (final id in _selectedIds) {
         batch.update(_fb.firestore.collection('user_recordings').doc(id), {
@@ -76,6 +87,10 @@ class _UserRecordingsScreenState extends State<UserRecordingsScreen> {
         });
       }
       await batch.commit();
+      for (final (sid, sname) in affected) {
+        await CatalogSync.recomputeApprovedCount(_fb.firestore,
+            signId: sid, signName: sname);
+      }
     }
     if (mounted) {
       setState(() { _selectedIds.clear(); _selectMode = false; });
@@ -92,7 +107,6 @@ class _UserRecordingsScreenState extends State<UserRecordingsScreen> {
     if (data == null) return;
     final signId = data['signId'] as int?;
     final landmarksPath = data['landmarksUrl'] as String?;
-    final userName = data['userName'] as String?;
 
     // Update recording status
     await _fb.firestore.collection('user_recordings').doc(docId).update({
@@ -101,13 +115,25 @@ class _UserRecordingsScreenState extends State<UserRecordingsScreen> {
       'reviewedBy': 'admin',
     });
 
-    // Update catalog entry if we have sign info
+    // Update catalog entry if we have sign info (keeps the sample path list)
     if (signId != null && landmarksPath != null) {
-      final catSnapshot = await _fb.firestore
+      var catSnapshot = await _fb.firestore
           .collection('catalog')
           .where('signId', isEqualTo: signId)
           .limit(1)
           .get();
+      // Fall back to the sign name: recordings and the catalog don't share
+      // the same sign-id space (see CatalogSync).
+      if (catSnapshot.docs.isEmpty) {
+        final name = data['signName'] as String?;
+        if (name != null && name.trim().isNotEmpty) {
+          catSnapshot = await _fb.firestore
+              .collection('catalog')
+              .where('signName', isEqualTo: name)
+              .limit(1)
+              .get();
+        }
+      }
       if (catSnapshot.docs.isNotEmpty) {
         final catDoc = catSnapshot.docs.first;
         final catData = catDoc.data();
@@ -116,13 +142,16 @@ class _UserRecordingsScreenState extends State<UserRecordingsScreen> {
         if (!existingPaths.contains(landmarksPath)) {
           existingPaths.add(landmarksPath);
         }
-        final approvedCount = (catData['approvedSampleCount'] as int? ?? 0) + 1;
         await _fb.firestore.collection('catalog').doc(catDoc.id).update({
           'landmarkSamplePaths': existingPaths,
-          'approvedSampleCount': approvedCount,
         });
       }
     }
+
+    // Recompute the approved-sample counter from scratch instead of a blind
+    // `+1` (which drifted whenever a status was flipped more than once).
+    await CatalogSync.recomputeApprovedCount(_fb.firestore,
+        signId: signId, signName: data['signName'] as String?);
 
     // Update device trust
     try {
@@ -191,7 +220,6 @@ class _UserRecordingsScreenState extends State<UserRecordingsScreen> {
         r.reviewedAt?.toIso8601String() ?? '', r.reviewedBy ?? '',
       ].map((v) => '"${v.toString().replaceAll('"', '""')}"').join(','));
     }
-    final csv = rows.join('\n');
     // Note: web export not available on mobile - would need platform-specific implementation
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Text('Exported ${rows.length - 1} recordings as CSV'),
