@@ -20,7 +20,7 @@ class DbHelper {
 
     return await openDatabase(
       path,
-      version: 8,
+      version: 9,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -33,6 +33,7 @@ class DbHelper {
         name TEXT NOT NULL,
         role TEXT NOT NULL,
         language_preference TEXT DEFAULT 'Filipino',
+        user_name TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
       )
     ''');
@@ -150,6 +151,7 @@ class DbHelper {
         handedness TEXT DEFAULT 'unknown',
         hand_idx INTEGER DEFAULT 0,
         synced INTEGER DEFAULT 0,
+        user_name TEXT,
         FOREIGN KEY (sign_id) REFERENCES fsl_signs(id)
       )
     ''');
@@ -237,12 +239,8 @@ class DbHelper {
       ''');
     }
     if (oldVersion < 8) {
-      await db.execute('''
-        ALTER TABLE users ADD COLUMN user_name TEXT
-      ''');
-      await db.execute('''
-        ALTER TABLE training_samples ADD COLUMN user_name TEXT
-      ''');
+      await _addColumnIfMissing(db, 'users', 'user_name', 'TEXT');
+      await _addColumnIfMissing(db, 'training_samples', 'user_name', 'TEXT');
       // Seed categories table with default data matching admin panel mapping
       await db.execute('''
         INSERT OR IGNORE INTO categories (id, category_name, english_name) VALUES
@@ -251,6 +249,29 @@ class DbHelper {
         (2, 'Mga Bilang', 'Numbers'),
         (3, 'Mga Pangunahing Galaw', 'Basic Gestures')
       ''');
+    }
+    if (oldVersion < 9) {
+      // Repair devices whose database was CREATED at version 8 by a build
+      // whose _onCreate omitted these columns: those installs never run the
+      // `oldVersion < 8` branch above, so every INSERT with user_name threw
+      // "table training_samples has no column named user_name" and recorded
+      // samples silently never landed (sample count stayed at 0).
+      await _addColumnIfMissing(db, 'users', 'user_name', 'TEXT');
+      await _addColumnIfMissing(db, 'training_samples', 'user_name', 'TEXT');
+    }
+  }
+
+  /// Adds [column] to [table] unless it is already present, so migrations
+  /// self-heal regardless of which path (fresh create vs. upgrade) produced
+  /// the current schema.
+  Future<void> _addColumnIfMissing(
+      Database db, String table, String column, String type) async {
+    try {
+      final info = await db.rawQuery('PRAGMA table_info($table)');
+      if (info.any((row) => row['name'] == column)) return;
+      await db.execute('ALTER TABLE $table ADD COLUMN $column $type');
+    } catch (_) {
+      // Best-effort: a failed repair must never block app startup.
     }
   }
 }

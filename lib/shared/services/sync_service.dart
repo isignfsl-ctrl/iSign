@@ -283,10 +283,29 @@ class SyncService {
 
       for (final doc in snapshot.docs) {
         final data = doc.data();
-        final signId = data['signId'] as int?;
+        final cloudSignId = data['signId'] as int?;
         final framesJson = data['framesJson'] as String?;
 
-        if (signId == null || framesJson == null) continue;
+        if (framesJson == null) continue;
+
+        // The recording carries the sign id of the DEVICE THAT UPLOADED IT.
+        // Sign ids are per-install (fsl_signs is seeded with AUTOINCREMENT and
+        // the dictionary has changed across releases), so id-only matching
+        // attached approved samples to the wrong local sign — or to a sign
+        // that does not exist here at all — leaving the real sign "untrained"
+        // no matter how much approved data existed. Resolve by sign NAME
+        // first (always uploaded alongside the id), then fall back to the id.
+        var signId = cloudSignId;
+        final cloudSignName = (data['signName'] as String? ?? '').trim();
+        if (cloudSignName.isNotEmpty) {
+          final byName = await db.query('fsl_signs',
+              columns: ['id'],
+              where: 'sign_name = ?',
+              whereArgs: [cloudSignName],
+              limit: 1);
+          if (byName.isNotEmpty) signId = byName.first['id'] as int?;
+        }
+        if (signId == null) continue;
 
         final cloudPath = 'recordings/${doc.id}';
 
@@ -309,7 +328,11 @@ class SyncService {
 
           final existing = await db.query('reference_landmarks',
               where: 'cloud_path = ?', whereArgs: [cloudPath]);
-          if (existing.length != samples.length) {
+          // Re-materialize when the row count differs OR when earlier syncs
+          // filed these samples under another device's sign id.
+          final misfiled =
+              existing.any((r) => (r['sign_id'] as int?) != signId);
+          if (existing.length != samples.length || misfiled) {
             // (Re)materialize rows for this recording — also migrates legacy
             // rows that concatenated every sample into a single row.
             await db.delete('reference_landmarks',
