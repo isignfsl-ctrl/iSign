@@ -144,9 +144,13 @@ class _SignRecorderScreenState extends State<SignRecorderScreen> {
       _cameraSensorOrientation = _cameras![_cameraIndex].sensorOrientation;
       _isFrontCamera =
           _cameras![_cameraIndex].lensDirection == CameraLensDirection.front;
+      // 720p is deliberate: the detector downscales to maxDim 640 anyway, so
+      // a 1080p stream only added ~3.1 MB of NV21 planes per frame (30 fps ->
+      // ~94 MB/s crossing the platform channel onto the UI isolate) and made
+      // the preview visibly stutter on low-end devices.
       _cameraController = CameraController(
         _cameras![_cameraIndex],
-        ResolutionPreset.high,
+        ResolutionPreset.medium,
         imageFormatGroup: ImageFormatGroup.nv21,
       );
 
@@ -190,7 +194,12 @@ class _SignRecorderScreenState extends State<SignRecorderScreen> {
 
       final transformed = _transformLandmarks(landmarks);
 
-      if (mounted) {
+      // Rebuild only when the overlay would visibly change. EMA smoothing
+      // makes the raw coordinates differ on every frame, so compare with a
+      // tolerance — this stops a 10 Hz setState storm from competing with the
+      // camera preview for UI-thread time, which is what stutters the preview
+      // on low-end devices.
+      if (mounted && _overlayChanged(transformed, label, confidence)) {
         setState(() {
           _currentLandmarks = transformed;
           _recognizedLabel = label;
@@ -272,6 +281,29 @@ class _SignRecorderScreenState extends State<SignRecorderScreen> {
         return LandmarkPoint(x, y, pt.z, pt.wx, pt.wy, pt.wz);
       }).toList();
     }).toList();
+  }
+
+  /// Whether [label]/[confidence]/[landmarks] differ enough from the values
+  /// currently on screen to be worth a rebuild. EMA smoothing guarantees tiny
+  /// per-frame coordinate drift, so a strict equality check would always be
+  /// true; these tolerances (~0.4% of the frame) match human-visible movement.
+  bool _overlayChanged(
+      List<List<LandmarkPoint>> landmarks, String label, double confidence) {
+    if (label != _recognizedLabel) return true;
+    if ((confidence - _recognizedConfidence).abs() > 0.05) return true;
+    final prev = _currentLandmarks;
+    if (prev.length != landmarks.length) return true;
+    const eps = 0.004;
+    for (var h = 0; h < landmarks.length; h++) {
+      if (prev[h].length != landmarks[h].length) return true;
+      for (var i = 0; i < landmarks[h].length; i++) {
+        if ((prev[h][i].x - landmarks[h][i].x).abs() > eps ||
+            (prev[h][i].y - landmarks[h][i].y).abs() > eps) {
+          return true;
+        }
+      }
+    }
+    return false;
   }
 
   // --- Burst mode ---

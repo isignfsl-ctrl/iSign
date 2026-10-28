@@ -1,3 +1,4 @@
+import 'dart:isolate';
 import 'dart:math';
 import 'package:camera/camera.dart';
 import 'package:hand_detection/hand_detection.dart';
@@ -53,8 +54,18 @@ class MediaPipeHandler {
     if (!_isLoaded || _detector == null) return [];
 
     try {
-      final hands = await _detector!.detectFromCameraImage(
-        image,
+      // prepareCameraFrameFromImage() repacks the NV21 planes with packYuv420,
+      // a pure-Dart row copy of ~1.4 MB per 720p frame. The package's
+      // detectFromCameraImage() does that on the calling isolate — the UI
+      // thread — which is exactly what stutters the preview on low-end
+      // hardware. Run it in a worker isolate, then hand the prepared frame to
+      // the detector (whose inference already runs in its own isolate, and
+      // which receives the bytes zero-copy via TransferableTypedData).
+      final frame = await Isolate.run(() => prepareCameraFrameFromImage(image));
+      if (frame == null) return [];
+
+      final hands = await _detector!.detectFromCameraFrame(
+        frame,
         maxDim: 640,
       );
 

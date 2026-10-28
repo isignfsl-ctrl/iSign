@@ -109,10 +109,27 @@ class TrainingUploadService {
           'recordings/$deviceId/${sample.signId}_${sample.recordedAt?.millisecondsSinceEpoch ?? DateTime.now().millisecondsSinceEpoch}.json';
 
       // Create Firestore document (unified 'recordings' collection)
+      // signName must be the SIGN's name — sample.userName is the recording
+      // person's profile name, and shipping that made every WorkManager
+      // upload land in the admin panel under a human name ("Kevin Hart"),
+      // breaking both the display and name-based sign-id matching.
+      String signName = 'Unknown';
+      try {
+        final db = await DbHelper().database;
+        final rows = await db.query('fsl_signs',
+            columns: ['sign_name'],
+            where: 'id = ?',
+            whereArgs: [sample.signId],
+            limit: 1);
+        if (rows.isNotEmpty) {
+          signName = rows.first['sign_name'] as String? ?? 'Unknown';
+        }
+      } catch (_) {}
+
       await _firestore.collection('recordings').add({
         'deviceId': deviceId,
         'signId': sample.signId,
-        'signName': sample.userName ?? 'Unknown',
+        'signName': signName,
         'landmarksPath': logicalPath,
         'framesJson': payload,
         'handedness': sample.handedness,
@@ -170,6 +187,9 @@ class TrainingUploadService {
       final samples = await getUnsyncedSamples(limit: 10);
       if (samples.isEmpty) break;
 
+      final batchOk = <TrainingSample>[];
+      var batchFailed = 0;
+
       for (final sample in samples) {
         bool success = false;
         int retries = 0;
@@ -183,15 +203,27 @@ class TrainingUploadService {
         }
 
         if (success) {
-          successfulSamples.add(sample);
+          batchOk.add(sample);
+        } else {
+          batchFailed++;
         }
+      }
+
+      // Persist each pass's successes immediately: they leave the unsynced
+      // set, failures stay queued for the next run. Then bail out as soon as
+      // a pass makes no progress — previously the loop had no exit
+      // condition, so a permanently failing batch (no signed-in user, bad
+      // credentials...) was re-queried and retried forever, spinning for
+      // WorkManager's entire 10-minute budget.
+      if (batchOk.isNotEmpty) {
+        await markSamplesSynced(batchOk);
+        successfulSamples.addAll(batchOk);
+      } else if (batchFailed > 0) {
+        break;
       }
 
       await Future.delayed(const Duration(milliseconds: 500));
     }
-
-    // Mark successfully uploaded samples as synced
-    await markSamplesSynced(successfulSamples);
 
     // Roll this background batch up onto the device's activity record so the
     // admin panel's "most active" ranking includes WorkManager uploads too.

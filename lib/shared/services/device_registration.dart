@@ -2,6 +2,7 @@ import 'dart:math';
 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -88,6 +89,7 @@ class DeviceRegistration {
   Future<String?> registerDevice() async {
     final user = _auth.currentUser;
     if (user == null) return 'Not signed in';
+    if (!await _isOnline()) return 'Offline';
 
     try {
       final deviceId = await getDeviceId();
@@ -119,12 +121,12 @@ class DeviceRegistration {
         'lastSync': now,
         'lastActive': now,
         'activeSessions': FieldValue.increment(1),
-      }, SetOptions(merge: true));
+      }, SetOptions(merge: true)).timeout(const Duration(seconds: 10));
 
       await _firestore.collection('users').doc(user.uid).set({
         'devices': FieldValue.arrayUnion([deviceId]),
         'lastActive': now,
-      }, SetOptions(merge: true));
+      }, SetOptions(merge: true)).timeout(const Duration(seconds: 10));
 
       return null;
     } catch (e) {
@@ -137,12 +139,28 @@ class DeviceRegistration {
   Future<void> touchActivity() async {
     final user = _auth.currentUser;
     if (user == null) return;
+    if (!await _isOnline()) return;
     try {
       final deviceId = await getDeviceId();
       await _firestore.collection('devices').doc(deviceId).set({
         'lastActive': DateTime.now().toIso8601String(),
-      }, SetOptions(merge: true));
+      }, SetOptions(merge: true)).timeout(const Duration(seconds: 10));
     } catch (_) {}
+  }
+
+  /// True when the device has any network route.
+  ///
+  /// Firestore writes issued offline stay pending forever (a write Future only
+  /// resolves once the server acknowledges it), so callers skip them instead
+  /// of leaving futures — and an ever-growing offline write queue — behind.
+  Future<bool> _isOnline() async {
+    try {
+      final status = await Connectivity().checkConnectivity();
+      return status.any((r) => r != ConnectivityResult.none);
+    } catch (_) {
+      // Unknown state — let the call proceed and rely on its own timeout.
+      return true;
+    }
   }
 
   Future<void> updateProfile(String name, String role) async {
