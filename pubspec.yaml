@@ -2,7 +2,7 @@ name: isign
 description: "An offline AI-driven Filipino Sign Language (FSL) recording and translation system."
 publish_to: 'none'
 
-version: 1.0.4+8
+version: 1.0.5+9
 
 environment:
   sdk: ^3.0.0
