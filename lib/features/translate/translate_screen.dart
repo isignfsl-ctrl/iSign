@@ -22,6 +22,8 @@ import '../../data/repositories/translation_repository.dart';
 import '../../data/models/translation_model.dart';
 import '../../data/models/translation_detail_model.dart';
 import '../../data/database/db_helper.dart';
+import 'sign_tutorial.dart';
+import 'sign_tutorial_strip.dart';
 
 class TranslateScreen extends StatefulWidget {
   const TranslateScreen({super.key});
@@ -61,6 +63,7 @@ class TranslateScreenState extends State<TranslateScreen>
   String _sttStatusMessage = '';
   bool _isPressingToTalk = false;
   final List<String> _speechSentences = [];
+  List<SignTutorialItem> _signTutorial = [];
   bool _sttPermissionChecked = false;
   List<String> _alternativeSigns = [];
   Timer? _altTimer;
@@ -437,8 +440,19 @@ class TranslateScreenState extends State<TranslateScreen>
           });
         }
       });
+      if (finalText.trim().isNotEmpty) {
+        unawaited(_refreshSignTutorial(finalText.trim()));
+      }
       _autoSave();
     }
+  }
+
+  /// Match the latest sentence against the sign catalog so speech mode can
+  /// show how each referenced sign is performed (the tutorial strip).
+  Future<void> _refreshSignTutorial(String sentence) async {
+    final items = await matchSignTutorial(sentence);
+    if (!mounted) return;
+    setState(() => _signTutorial = items);
   }
 
   void _clearConversation() {
@@ -447,6 +461,7 @@ class TranslateScreenState extends State<TranslateScreen>
       _translatedText = '';
       _lastSavedText = '';
       _sttStatusMessage = '';
+      _signTutorial = [];
     });
   }
 
@@ -812,39 +827,51 @@ class TranslateScreenState extends State<TranslateScreen>
               : ListView.builder(
                   padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
                   itemCount: _speechSentences.length,
-                  itemBuilder: (_, i) => Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: Row(
+                  itemBuilder: (_, i) {
+                    final isLast = i == _speechSentences.length - 1;
+                    return Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Container(
-                          margin: const EdgeInsets.only(right: 8, top: 2),
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: AppColors.accentDark,
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Text(
-                            '${i + 1}',
-                            style: const TextStyle(fontSize: 11, color: Colors.white, fontWeight: FontWeight.w600),
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Container(
+                                margin: const EdgeInsets.only(right: 8, top: 2),
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: AppColors.accentDark,
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Text(
+                                  '${i + 1}',
+                                  style: const TextStyle(fontSize: 11, color: Colors.white, fontWeight: FontWeight.w600),
+                                ),
+                              ),
+                              Expanded(
+                                child: Container(
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white12,
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Text(
+                                    _speechSentences[i],
+                                    style: const TextStyle(fontSize: 17, color: Colors.white, height: 1.3),
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                        Expanded(
-                          child: Container(
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: Colors.white12,
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Text(
-                              _speechSentences[i],
-                              style: const TextStyle(fontSize: 17, color: Colors.white, height: 1.3),
-                            ),
-                          ),
-                        ),
+                        // Signs for the latest sentence, right where the deaf
+                        // person is reading it.
+                        if (isLast && _signTutorial.isNotEmpty)
+                          SignTutorialStrip(items: _signTutorial),
                       ],
-                    ),
-                  ),
+                    );
+                  },
                 ),
         ),
         // Partial text
