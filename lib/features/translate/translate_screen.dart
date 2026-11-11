@@ -56,6 +56,11 @@ class TranslateScreenState extends State<TranslateScreen>
   double _currentConfidence = 0.0;
   String _translatedText = '';
   String _lastSavedText = '';
+  // The conversation currently on disk: one translation row + one detail
+  // row holding the whole sentence, rewritten as the conversation grows.
+  int? _lastSavedId;
+  int? _lastDetailId;
+  Future<void> _saveQueue = Future.value();
 
   bool _isSpeechMode = false;
   String _sttPartialText = '';
@@ -459,44 +464,81 @@ class TranslateScreenState extends State<TranslateScreen>
     setState(() {
       _speechSentences.clear();
       _translatedText = '';
-      _lastSavedText = '';
       _sttStatusMessage = '';
       _signTutorial = [];
+      _resetSavedConversation();
     });
   }
 
+  /// Saves the conversation as ONE record: the first save inserts a
+  /// translation row plus a single detail row holding the whole sentence;
+  /// later saves rewrite that same detail row as the sentence grows. Word
+  /// by word rows would show up in Recent Translations as one record per
+  /// recognized sign, which is what this replaces.
   Future<void> _saveTranslation() async {
     String text = _translatedText;
     if (text.isEmpty && _currentConfidence >= 0.75) {
       text = _currentLabel;
     }
     if (text.isEmpty) return;
-    final id = await _translationRepo.insertTranslation(TranslationModel(
-      mode: _isSpeechMode ? 'speech' : 'realtime',
-      outputLanguage: _settings.language.value,
-    ));
-    final words = text.split(' ');
-    for (int i = 0; i < words.length; i++) {
-      await _translationRepo.insertDetail(TranslationDetailModel(
+
+    // Re-check the remembered row: it disappears if the user deleted the
+    // conversation (or another reset happened mid-save) — then start a new
+    // record instead of writing into a stale id.
+    if (_lastSavedId != null &&
+        await _translationRepo.getTranslationById(_lastSavedId!) == null) {
+      _lastSavedId = null;
+      _lastDetailId = null;
+    }
+
+    if (_lastSavedId == null || _lastDetailId == null) {
+      final id = await _translationRepo.insertTranslation(TranslationModel(
+        mode: _isSpeechMode ? 'speech' : 'realtime',
+        outputLanguage: _settings.language.value,
+      ));
+      final detailId = await _translationRepo
+          .insertDetail(TranslationDetailModel(
         translationId: id,
         signId: null,
-        sequenceOrder: i,
-        translatedText: words[i],
+        sequenceOrder: 0,
+        translatedText: text,
         confidenceScore: 1.0,
       ));
+      _lastSavedId = id;
+      _lastDetailId = detailId;
+    } else {
+      await _translationRepo
+          .updateDetailText(_lastDetailId!, text);
     }
   }
 
   void _autoSave() {
     if (_translatedText.isNotEmpty && _translatedText != _lastSavedText) {
       _lastSavedText = _translatedText;
-      _saveTranslation();
+      // Chain saves so rapid per-frame updates apply strictly in order
+      // instead of racing each other. A failed write must not poison the
+      // chain, so swallow it here — the next change retries naturally.
+      _saveQueue = _saveQueue
+          .then((_) => _saveTranslation())
+          .catchError((Object e) {
+        debugPrint('Translation auto-save failed: $e');
+      });
     }
+  }
+
+  /// Forget the stored conversation so the next text change starts a fresh
+  /// record. [_lastSavedText] is seeded with the current text so merely
+  /// switching modes doesn't re-save the unchanged sentence as a duplicate.
+  void _resetSavedConversation() {
+    _lastSavedText = _translatedText;
+    _lastSavedId = null;
+    _lastDetailId = null;
   }
 
   void _switchToSpeechMode() {
     setState(() {
       _isSpeechMode = true;
+      _resetSavedConversation();
       if (!_sttService.isAvailable) {
         _sttErrorReason = 'Speech recognition model not loaded. Try restarting the app.';
       } else {
@@ -522,9 +564,22 @@ class TranslateScreenState extends State<TranslateScreen>
     return _signNameMap[label] ?? label;
   }
 
+  /// Translates the sentence word-by-word to English when that output
+  /// language is active. Sentence punctuation (the '.' appended by
+  /// `GestureSequence.translatedText`) is stripped for the sign-name lookup
+  /// and re-attached, so "Kumusta." still maps to its English name.
   String _translateSentence(String text) {
     if (!_translator.isEnglish || text.isEmpty) return text;
-    return text.split(' ').map((w) => _signNameMap[w] ?? w).join(' ');
+    return text.split(' ').map((w) {
+      var word = w;
+      var suffix = '';
+      while (word.isNotEmpty &&
+          (word.endsWith('.') || word.endsWith('?') || word.endsWith('!'))) {
+        suffix = word[word.length - 1] + suffix;
+        word = word.substring(0, word.length - 1);
+      }
+      return (_signNameMap[word] ?? word) + suffix;
+    }).join(' ');
   }
 
   void stopCamera() {
@@ -1011,7 +1066,11 @@ class TranslateScreenState extends State<TranslateScreen>
                         child: GestureDetector(
                           onTap: () {
                             _onPressEnd();
-                            setState(() => _isSpeechMode = false);
+                            setState(() {
+                              _isSpeechMode = false;
+                              // Gesture mode starts a fresh conversation.
+                              _resetSavedConversation();
+                            });
                           },
                           child: Container(
                             padding: const EdgeInsets.symmetric(vertical: 6),

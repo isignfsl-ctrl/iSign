@@ -64,6 +64,18 @@ class TranslationRepository {
     return db.insert('translation_details', detail.toMap()..remove('id'));
   }
 
+  /// Overwrites the text of one detail row — used to keep a single
+  /// conversation stored as one row that is rewritten as it grows.
+  Future<void> updateDetailText(int detailId, String text) async {
+    final db = await _dbConn;
+    await db.update(
+      'translation_details',
+      {'translated_text': text},
+      where: 'id = ?',
+      whereArgs: [detailId],
+    );
+  }
+
   Future<List<TranslationDetailModel>> getDetailsForTranslation(
       int translationId) async {
     final db = await _dbConn;

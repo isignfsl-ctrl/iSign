@@ -25,17 +25,21 @@ class GestureSequence {
   double get currentVelocity => _currentVelocity;
   bool get isEmpty => _sequence.isEmpty;
 
+  /// The recognized signs joined as readable sentences: single spaces
+  /// between words, a sentence break ('. ') at phrase pauses, always
+  /// ending with a period.
   String get translatedText {
     if (_sequence.isEmpty) return '';
     final sb = StringBuffer();
     for (int i = 0; i < _sequence.length; i++) {
-      if (_phraseBreaks.contains(i)) {
-        sb.write(' | ');
-      } else if (i > 0) {
-        sb.write(' ');
+      if (i > 0) {
+        // A phrase break closes the previous sentence; otherwise the words
+        // flow together with a plain space.
+        sb.write(_phraseBreaks.contains(i) ? '. ' : ' ');
       }
       sb.write(_sequence[i]);
     }
+    sb.write('.');
     return sb.toString();
   }
 

@@ -79,9 +79,13 @@ class _HomeScreenState extends State<HomeScreen> {
 
     final recent = await db.rawQuery('''
       SELECT t.id, t.created_at, t.mode,
-             GROUP_CONCAT(td.translated_text, ' ') AS full_text
+             GROUP_CONCAT(NULLIF(td.translated_text, '|'), ' ') AS full_text
       FROM translations t
-      LEFT JOIN translation_details td ON td.translation_id = t.id
+      LEFT JOIN (
+        SELECT translation_id, translated_text
+        FROM translation_details
+        ORDER BY sequence_order ASC, id ASC
+      ) td ON td.translation_id = t.id
       GROUP BY t.id
       ORDER BY t.created_at DESC
       LIMIT 5

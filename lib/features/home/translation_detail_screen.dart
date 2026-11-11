@@ -116,8 +116,9 @@ class _TranslationDetailScreenState extends State<TranslationDetailScreen> {
             ),
           ),
           const SizedBox(height: 20),
-          ..._details.map((d) => _buildDetailCard(d)),
-          if (_details.isEmpty)
+          if (_details.isNotEmpty)
+            _buildSentenceCard()
+          else
             Center(
               child: Padding(
                 padding: const EdgeInsets.only(top: 40),
@@ -135,11 +136,39 @@ class _TranslationDetailScreenState extends State<TranslationDetailScreen> {
     );
   }
 
-  Widget _buildDetailCard(TranslationDetailModel detail) {
+  /// The whole conversation as one readable sentence.
+  ///
+  /// New records store the sentence in a single detail row; older records
+  /// were stored one word per row, so the rows are joined here. Legacy
+  /// `'|'` phrase-break rows become sentence-ending periods instead of
+  /// showing up as literal pipes.
+  static bool _isSentenceEnd(String s) =>
+      s.endsWith('.') || s.endsWith('?') || s.endsWith('!');
+
+  String _buildSentence() {
+    final parts = <String>[];
+    for (final detail in _details) {
+      final raw = (detail.translatedText ?? '').trim();
+      if (raw.isEmpty) continue;
+      if (raw == '|') {
+        // Legacy phrase break: close the previous word into a sentence.
+        if (parts.isNotEmpty && !_isSentenceEnd(parts.last)) {
+          parts[parts.length - 1] = '${parts.last}.';
+        }
+        continue;
+      }
+      parts.add(raw);
+    }
+    final sentence = parts.join(' ');
+    if (sentence.isEmpty) return sentence;
+    return _isSentenceEnd(sentence) ? sentence : '$sentence.';
+  }
+
+  Widget _buildSentenceCard() {
+    final sentence = _buildSentence();
     return Container(
       width: double.infinity,
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(12),
@@ -147,53 +176,26 @@ class _TranslationDetailScreenState extends State<TranslationDetailScreen> {
           color: Theme.of(context).colorScheme.outlineVariant,
         ),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: 32,
-            height: 32,
-            decoration: BoxDecoration(
-              color: AppColors.primary.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Center(
-              child: Text(
-                '${detail.sequenceOrder ?? 0}',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.primary,
-                ),
-              ),
+          Text(
+            'Translation',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: context.textSecondary,
             ),
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              detail.translatedText ?? '',
-              style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w500,
-                height: 1.4,
-              ),
+          const SizedBox(height: 8),
+          Text(
+            sentence,
+            style: const TextStyle(
+              fontSize: 17,
+              fontWeight: FontWeight.w500,
+              height: 1.45,
             ),
           ),
-          if (detail.confidenceScore != null)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-              decoration: BoxDecoration(
-                color: Colors.green.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: Text(
-                '${(detail.confidenceScore! * 100).toInt()}%',
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.green.shade700,
-                ),
-              ),
-            ),
         ],
       ),
     );
