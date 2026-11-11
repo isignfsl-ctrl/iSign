@@ -4,6 +4,7 @@ import '../../core/themes/app_colors.dart';
 import '../../core/themes/theme_extensions.dart';
 import '../../data/database/db_helper.dart';
 import '../../shared/services/app_settings.dart';
+import '../../shared/widgets/sync_tips_card.dart';
 import 'translation_detail_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -141,6 +142,8 @@ class _HomeScreenState extends State<HomeScreen> {
             _buildHowToUse(),
             const SizedBox(height: 16),
             _buildStartButton(),
+            const SizedBox(height: 20),
+            const SyncTipsCard(),
             const SizedBox(height: 20),
             _buildRecentSection(),
           ],

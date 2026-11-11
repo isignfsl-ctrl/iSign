@@ -12,6 +12,7 @@ import '../../shared/services/firebase_service.dart';
 import '../../shared/services/catalog_notifier.dart';
 import '../../shared/services/device_registration.dart';
 import '../../shared/services/update_service.dart';
+import '../../shared/widgets/sync_tips_card.dart';
 import '../../shared/widgets/update_dialog.dart';
 import 'evaluation_report_screen.dart';
 import 'submit_feedback_screen.dart';
@@ -510,6 +511,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
             Icons.history,
             color: Theme.of(context).colorScheme.primary,
           ),
+        ),
+        const Padding(
+          padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
+          child: SyncTipsCard(compact: true),
         ),
         _buildColorPicker(),
       ],
