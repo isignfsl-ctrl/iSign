@@ -6,15 +6,17 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:isign_shared/isign_shared.dart';
-import 'package:sqflite/sqflite.dart';
 import '../../data/database/db_helper.dart';
+import '../../ai/reference_matcher.dart';
 
 class SyncService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseStorage _storage = FirebaseStorage.instance;
   final Connectivity _connectivity = Connectivity();
 
-  bool _isSyncing = false;
+  // Static so concurrent SyncService instances (Settings, Translate, …)
+  // can never run two downloads that race each other's rows.
+  static bool _isSyncing = false;
   bool _isConnected = false;
   String _connectionType = 'unknown';
   StreamSubscription? _connectivitySub;
@@ -69,7 +71,7 @@ class SyncService {
       final file = File('${dir.path}/${signId}_$timestamp.json');
       await file.writeAsString(jsonStr);
 
-      final storagePath = 'recordings/$deviceId/${signId}_${handedness}_${timestamp}.json';
+      final storagePath = 'recordings/$deviceId/${signId}_${handedness}_$timestamp.json';
       await _storage.ref(storagePath).putFile(file);
       await file.delete();
 
@@ -265,14 +267,16 @@ class SyncService {
     void Function(int progress, int total)? onProgress,
   }) async {
     if (_isSyncing) return SyncResult(success: false, error: 'Already syncing');
+    // Re-check connectivity at call time — the cached flag can be stale if
+    // startMonitoring() hasn't delivered its first event yet.
+    final status = await _connectivity.checkConnectivity();
+    _isConnected = status.any((r) => r != ConnectivityResult.none);
     if (!_isConnected) return SyncResult(success: false, error: 'No internet connection');
 
     _isSyncing = true;
     int downloaded = 0;
 
     try {
-      final db = await DbHelper().database;
-
       // Get all approved recordings from cloud
       final snapshot = await _firestore
           .collection('recordings')
@@ -282,96 +286,155 @@ class SyncService {
       final total = snapshot.docs.length;
 
       for (final doc in snapshot.docs) {
-        final data = doc.data();
-        final cloudSignId = data['signId'] as int?;
-        final framesJson = data['framesJson'] as String?;
-
-        if (framesJson == null) continue;
-
-        // The recording carries the sign id of the DEVICE THAT UPLOADED IT.
-        // Sign ids are per-install (fsl_signs is seeded with AUTOINCREMENT and
-        // the dictionary has changed across releases), so id-only matching
-        // attached approved samples to the wrong local sign — or to a sign
-        // that does not exist here at all — leaving the real sign "untrained"
-        // no matter how much approved data existed. Resolve by sign NAME
-        // first (always uploaded alongside the id), then fall back to the id.
-        var signId = cloudSignId;
-        final cloudSignName = (data['signName'] as String? ?? '').trim();
-        if (cloudSignName.isNotEmpty) {
-          final byName = await db.query('fsl_signs',
-              columns: ['id'],
-              where: 'sign_name = ?',
-              whereArgs: [cloudSignName],
-              limit: 1);
-          if (byName.isNotEmpty) signId = byName.first['id'] as int?;
-        }
-        if (signId == null) continue;
-
-        final cloudPath = 'recordings/${doc.id}';
-
-        try {
-          final payload = jsonDecode(framesJson) as Map<String, dynamic>;
-          final rawFrames = payload['frames'] as List<dynamic>?;
-          if (rawFrames == null || rawFrames.isEmpty) continue;
-
-          // One reference row per recorded sample (each sample is a flat
-          // 63-value frame sequence). COUNT(*) of rows therefore equals the
-          // number of approved samples for the sign.
-          final samples = <List<double>>[];
-          for (final f in rawFrames) {
-            if (f is! List || f.isEmpty) continue;
-            if (!f.every((v) => v is num)) continue;
-            final nums = <double>[for (final v in f) (v as num).toDouble()];
-            if (nums.length >= 63) samples.add(nums);
-          }
-          if (samples.isEmpty) continue;
-
-          final existing = await db.query('reference_landmarks',
-              where: 'cloud_path = ?', whereArgs: [cloudPath]);
-          // Re-materialize when the row count differs OR when earlier syncs
-          // filed these samples under another device's sign id.
-          final misfiled =
-              existing.any((r) => (r['sign_id'] as int?) != signId);
-          if (existing.length != samples.length || misfiled) {
-            // (Re)materialize rows for this recording — also migrates legacy
-            // rows that concatenated every sample into a single row.
-            await db.delete('reference_landmarks',
-                where: 'cloud_path = ?', whereArgs: [cloudPath]);
-            for (final sample in samples) {
-              await db.insert('reference_landmarks', {
-                'sign_id': signId,
-                'landmarks_json': jsonEncode(sample),
-                'handedness': data['handedness'] as String? ?? 'unknown',
-                'hand_idx': data['handIdx'] as int? ?? 0,
-                'frame_count': sample.length ~/ 63,
-                'cloud_path': cloudPath,
-              });
-            }
-          }
-
-          // Update training status (rows == approved samples)
-          final refCount = await db.rawQuery(
-            'SELECT COUNT(*) as cnt FROM reference_landmarks WHERE sign_id = ?',
-            [signId],
-          );
-          final count = (refCount.first['cnt'] as int?) ?? 0;
-          final newStatus = count >= 5 ? 'trained' : 'untrained';
-          await db.update('fsl_signs', {'training_status': newStatus},
-              where: 'id = ?', whereArgs: [signId]);
-
+        if (await _materializeRecording(doc.id, doc.data())) {
           downloaded++;
-        } catch (_) {
-          // Skip individual failures
         }
-
         onProgress?.call(downloaded, total);
       }
 
       _isSyncing = false;
+      if (downloaded > 0) ReferenceMatcher.markDataChanged();
       return SyncResult(success: true, synced: downloaded);
     } catch (e) {
       _isSyncing = false;
       return SyncResult(success: false, error: e.toString(), synced: downloaded);
+    }
+  }
+
+  /// Downloads approved recordings for specific signs on demand — used by
+  /// the Translate tab's sign tutorial when a matched sign has no local
+  /// frame data yet (the device may never have run a full sync, or the sign
+  /// was approved after the last one). Rows are materialized exactly like
+  /// [downloadApprovedRecordings], so a later full sync stays consistent.
+  ///
+  /// `success: false` means offline/error (callers may retry); a successful
+  /// call with `synced: 0` means the cloud has no approved data for these
+  /// signs.
+  Future<SyncResult> downloadRecordingsForSigns(List<String> signNames) async {
+    if (_isSyncing) return SyncResult(success: false, error: 'Already syncing');
+    final status = await _connectivity.checkConnectivity();
+    _isConnected = status.any((r) => r != ConnectivityResult.none);
+    if (!_isConnected) {
+      return SyncResult(success: false, error: 'No internet connection');
+    }
+
+    _isSyncing = true;
+    var downloaded = 0;
+    try {
+      final wanted = <String>{
+        for (final n in signNames)
+          if (n.trim().isNotEmpty) n.trim(),
+      };
+
+      for (final name in wanted) {
+        // Single-field equality query (no composite index needed); the
+        // status filter runs here to avoid pulling pending recordings'
+        // frame payloads for nothing.
+        final snap = await _firestore
+            .collection('recordings')
+            .where('signName', isEqualTo: name)
+            .get();
+        for (final doc in snap.docs) {
+          final data = doc.data();
+          if (data['status'] != 'approved') continue;
+          if (await _materializeRecording(doc.id, data)) downloaded++;
+        }
+      }
+
+      if (downloaded > 0) ReferenceMatcher.markDataChanged();
+      return SyncResult(success: true, synced: downloaded);
+    } catch (e) {
+      return SyncResult(
+          success: false, error: e.toString(), synced: downloaded);
+    } finally {
+      _isSyncing = false;
+    }
+  }
+
+  /// Materializes one `recordings` document into local
+  /// `reference_landmarks` rows (one row per recorded sample) and refreshes
+  /// the sign's training status. Returns true when the document held usable
+  /// frame data.
+  Future<bool> _materializeRecording(
+      String docId, Map<String, dynamic> data) async {
+    final db = await DbHelper().database;
+    final framesJson = data['framesJson'] as String?;
+    if (framesJson == null) return false;
+
+    // The recording carries the sign id of THE DEVICE THAT UPLOADED IT.
+    // Sign ids are per-install (fsl_signs is seeded with AUTOINCREMENT and
+    // the dictionary has changed across releases), so id-only matching
+    // attached approved samples to the wrong local sign — or to a sign
+    // that does not exist here at all — leaving the real sign "untrained"
+    // no matter how much approved data existed. Resolve by sign NAME
+    // first (always uploaded alongside the id), then fall back to the id.
+    var signId = data['signId'] as int?;
+    final cloudSignName = (data['signName'] as String? ?? '').trim();
+    if (cloudSignName.isNotEmpty) {
+      final byName = await db.query('fsl_signs',
+          columns: ['id'],
+          where: 'sign_name = ?',
+          whereArgs: [cloudSignName],
+          limit: 1);
+      if (byName.isNotEmpty) signId = byName.first['id'] as int?;
+    }
+    if (signId == null) return false;
+
+    final cloudPath = 'recordings/$docId';
+
+    try {
+      final payload = jsonDecode(framesJson) as Map<String, dynamic>;
+      final rawFrames = payload['frames'] as List<dynamic>?;
+      if (rawFrames == null || rawFrames.isEmpty) return false;
+
+      // One reference row per recorded sample (each sample is a flat
+      // 63-value frame sequence). COUNT(*) of rows therefore equals the
+      // number of approved samples for the sign.
+      final samples = <List<double>>[];
+      for (final f in rawFrames) {
+        if (f is! List || f.isEmpty) continue;
+        if (!f.every((v) => v is num)) continue;
+        final nums = <double>[for (final v in f) (v as num).toDouble()];
+        if (nums.length >= 63) samples.add(nums);
+      }
+      if (samples.isEmpty) return false;
+
+      final existing = await db.query('reference_landmarks',
+          where: 'cloud_path = ?', whereArgs: [cloudPath]);
+      // Re-materialize when the row count differs OR when earlier syncs
+      // filed these samples under another device's sign id.
+      final misfiled = existing.any((r) => (r['sign_id'] as int?) != signId);
+      if (existing.length != samples.length || misfiled) {
+        // (Re)materialize rows for this recording — also migrates legacy
+        // rows that concatenated every sample into a single row.
+        await db.delete('reference_landmarks',
+            where: 'cloud_path = ?', whereArgs: [cloudPath]);
+        for (final sample in samples) {
+          await db.insert('reference_landmarks', {
+            'sign_id': signId,
+            'landmarks_json': jsonEncode(sample),
+            'handedness': data['handedness'] as String? ?? 'unknown',
+            'hand_idx': data['handIdx'] as int? ?? 0,
+            'frame_count': sample.length ~/ 63,
+            'cloud_path': cloudPath,
+          });
+        }
+      }
+
+      // Update training status (rows == approved samples)
+      final refCount = await db.rawQuery(
+        'SELECT COUNT(*) as cnt FROM reference_landmarks WHERE sign_id = ?',
+        [signId],
+      );
+      final count = (refCount.first['cnt'] as int?) ?? 0;
+      final newStatus = count >= 5 ? 'trained' : 'untrained';
+      await db.update('fsl_signs', {'training_status': newStatus},
+          where: 'id = ?', whereArgs: [signId]);
+
+      return true;
+    } catch (_) {
+      // Skip individual failures
+      return false;
     }
   }
 

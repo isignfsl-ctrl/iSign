@@ -16,6 +16,7 @@ import '../../shared/services/tts_service.dart';
 import '../../shared/services/stt_service.dart';
 import '../../shared/services/app_settings.dart';
 import '../../shared/services/sign_translator.dart';
+import '../../shared/services/sync_service.dart';
 import '../../shared/widgets/permission_required_screen.dart';
 import '../../data/models/fsl_sign_model.dart';
 import '../../data/repositories/translation_repository.dart';
@@ -94,6 +95,32 @@ class TranslateScreenState extends State<TranslateScreen>
     await _classifier.load();
     await _refMatcher.load();
     await _loadSignMap();
+    unawaited(_ensureReferenceData());
+  }
+
+  /// The sign tutorial and the reference matcher both run on locally stored
+  /// approved recordings. A fresh install (or a device that never opened
+  /// Settings → Sync) has none — pull them once automatically so gesture
+  /// recognition and the tutorial images work out of the box.
+  Future<void> _ensureReferenceData() async {
+    try {
+      final db = await DbHelper().database;
+      final cnt =
+          await db.rawQuery('SELECT COUNT(*) AS c FROM reference_landmarks');
+      if ((cnt.first['c'] as int? ?? 0) > 0) return; // synced at least once
+
+      final result = await SyncService().downloadApprovedRecordings();
+      if (!mounted || !result.success || result.synced == 0) return;
+
+      // downloadApprovedRecordings flagged the matcher (dataDirty) so the
+      // next camera frame reloads it; also refresh the tutorial for
+      // whatever sentence is on screen right now.
+      if (_speechSentences.isNotEmpty) {
+        unawaited(_refreshSignTutorial(_speechSentences.last));
+      }
+    } catch (e) {
+      debugPrint('Auto reference download failed: $e');
+    }
   }
 
   Future<void> _loadSignMap() async {
@@ -199,7 +226,10 @@ class TranslateScreenState extends State<TranslateScreen>
 
     _cameraController = CameraController(
       camera,
-      ResolutionPreset.high,
+      // medium (720p) — the hand detector resizes input to maxDim 640
+      // anyway, so high resolution only adds NV21 copy/convert cost and
+      // frame latency without improving landmark quality.
+      ResolutionPreset.medium,
       enableAudio: true,
       imageFormatGroup: ImageFormatGroup.nv21,
     );
@@ -247,25 +277,28 @@ class TranslateScreenState extends State<TranslateScreen>
       if (landmarks.isNotEmpty && landmarks[0].length >= 21) {
         var result0 = _classifier.classifyFused(landmarks[0]);
 
-        // Trained reference matching takes priority: approved recordings of
+        // Reload the matcher when a sync changed the stored recordings —
+        // otherwise the session would keep matching stale (or empty) data.
+        if (ReferenceMatcher.dataDirty) {
+          ReferenceMatcher.clearDataDirty();
+          unawaited(_refMatcher.reload());
+        }
+
+        // Trained reference matching takes priority: recorded samples of
         // this sign are ground truth and beat the static heuristics/NN.
-        // Order: DTW sequence match → single-frame match → fused classifier.
+        // matchLive ranks signs with a cheap single-frame pass, refines the
+        // top candidates with DTW, and falls back to this device's own
+        // recordings — see ReferenceMatcher.
         if (_refMatcher.isLoaded) {
           final normalized = _classifier.normalizeLandmarks(landmarks[0]);
-          final refResult = await _refMatcher.match(normalized);
-
-          ClassificationResult? seqResult;
           final buffer = _classifier.landmarkBuffer;
+          List<List<double>>? window;
           if (buffer.isFull) {
-            final window = buffer.getWindow();
-            if (window.length >= 5) {
-              seqResult = await _refMatcher.matchSequence(window);
-            }
+            final w = buffer.getWindow();
+            if (w.length >= 5) window = w;
           }
-
-          if (seqResult != null) {
-            result0 = seqResult;
-          } else if (refResult != null) {
+          final refResult = await _refMatcher.matchLive(normalized, window);
+          if (refResult != null) {
             result0 = refResult;
           }
         }
