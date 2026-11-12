@@ -23,6 +23,7 @@ import '../../data/repositories/translation_repository.dart';
 import '../../data/models/translation_model.dart';
 import '../../data/models/translation_detail_model.dart';
 import '../../data/database/db_helper.dart';
+import '../signs/add_sign_dialog.dart';
 import 'sign_tutorial.dart';
 import 'sign_tutorial_strip.dart';
 
@@ -503,6 +504,21 @@ class TranslateScreenState extends State<TranslateScreen>
     });
   }
 
+  /// Tapped "Create this sign" on an unregistered word: opens the same
+  /// Add New Sign dialog as the Signs tab, prefilled with the word, then
+  /// re-matches the sentence so the new sign's card replaces the
+  /// unregistered one (as "Train this sign" until recordings exist).
+  Future<void> _createSignFromTutorial(String word) async {
+    final name = await showAddSignDialog(context, initialName: word);
+    if (name == null || !mounted) return;
+    // The matcher caches sign names — reload it so gesture mode and the
+    // tutorial both know the new sign immediately.
+    ReferenceMatcher.markDataChanged();
+    if (_signTutorialSentence.isNotEmpty) {
+      unawaited(_refreshSignTutorial(_signTutorialSentence));
+    }
+  }
+
   void _clearConversation() {
     setState(() {
       _speechSentences.clear();
@@ -974,7 +990,10 @@ class TranslateScreenState extends State<TranslateScreen>
                             _signTutorialChecked &&
                             _signTutorialSentence == _speechSentences[i])
                           if (_signTutorial.isNotEmpty)
-                            SignTutorialStrip(items: _signTutorial)
+                            SignTutorialStrip(
+                              items: _signTutorial,
+                              onCreateSign: _createSignFromTutorial,
+                            )
                           else
                             Padding(
                               padding: const EdgeInsets.only(bottom: 8),

@@ -7,6 +7,7 @@ import '../../data/models/fsl_sign_model.dart';
 import '../../data/repositories/training_repository.dart';
 import '../../shared/services/sign_translator.dart';
 import '../../shared/services/catalog_notifier.dart';
+import 'add_sign_dialog.dart';
 import 'sign_detail_screen.dart';
 
 Color _categoryColor(String name) {
@@ -175,71 +176,14 @@ class _SignsScreenState extends State<SignsScreen> {
   }
 
   Future<void> _showAddSignDialog() async {
-    final nameCtl = TextEditingController();
-    final descCtl = TextEditingController();
-    int? selectedCatId = _categories.isNotEmpty ? _categories.first.id : null;
+    final name = await showAddSignDialog(context);
+    if (name == null || !mounted) return;
 
-    final saved = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDialogState) => AlertDialog(
-          title: const Text('Add New Sign'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                    controller: nameCtl,
-                    decoration: const InputDecoration(
-                        labelText: 'Sign Name', hintText: 'e.g. Salamat')),
-                const SizedBox(height: 12),
-                TextField(
-                    controller: descCtl,
-                    decoration: const InputDecoration(
-                        labelText: 'Description',
-                        hintText: 'Describe the gesture'),
-                    maxLines: 3),
-                const SizedBox(height: 12),
-                DropdownButtonFormField<int?>(
-                  value: selectedCatId,
-                  decoration: const InputDecoration(labelText: 'Category'),
-                  items: _categories
-                      .map((c) => DropdownMenuItem(
-                          value: c.id, child: Text(c.categoryName)))
-                      .toList(),
-                  onChanged: (v) => setDialogState(() => selectedCatId = v),
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-                onPressed: () => Navigator.of(ctx).pop(false),
-                child: const Text('Cancel')),
-            FilledButton(
-                onPressed: () => Navigator.of(ctx).pop(true),
-                child: const Text('Save')),
-          ],
-        ),
-      ),
-    );
-
-    if (saved == true && mounted) {
-      final name = nameCtl.text.trim();
-      if (name.isEmpty) return;
-
-      final db = await DbHelper().database;
-      await db.insert('fsl_signs', {
-        'sign_name': name,
-        'description': descCtl.text.trim(),
-        'category_id': selectedCatId,
-      });
-      await _loadData();
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('"$name" added')),
-        );
-      }
+    await _loadData();
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('"$name" added')),
+      );
     }
   }
 

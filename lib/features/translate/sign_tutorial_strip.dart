@@ -14,9 +14,17 @@ import 'sign_tutorial.dart';
 /// that are not registered signs at all show a "create this sign" card so
 /// no word of the sentence is silently dropped.
 class SignTutorialStrip extends StatelessWidget {
-  const SignTutorialStrip({super.key, required this.items});
+  const SignTutorialStrip({
+    super.key,
+    required this.items,
+    this.onCreateSign,
+  });
 
   final List<SignTutorialItem> items;
+
+  /// Called with the word when the user taps a "Create this sign" card
+  /// (a word that is not a registered sign yet).
+  final ValueChanged<String>? onCreateSign;
 
   @override
   Widget build(BuildContext context) {
@@ -27,16 +35,20 @@ class SignTutorialStrip extends StatelessWidget {
         padding: const EdgeInsets.only(top: 8, bottom: 4),
         itemCount: items.length,
         separatorBuilder: (_, __) => const SizedBox(width: 8),
-        itemBuilder: (_, i) => _SignTutorialCard(item: items[i]),
+        itemBuilder: (_, i) => _SignTutorialCard(
+          item: items[i],
+          onCreateSign: onCreateSign,
+        ),
       ),
     );
   }
 }
 
 class _SignTutorialCard extends StatefulWidget {
-  const _SignTutorialCard({required this.item});
+  const _SignTutorialCard({required this.item, this.onCreateSign});
 
   final SignTutorialItem item;
+  final ValueChanged<String>? onCreateSign;
 
   @override
   State<_SignTutorialCard> createState() => _SignTutorialCardState();
@@ -56,16 +68,20 @@ class _SignTutorialCardState extends State<_SignTutorialCard> {
   Widget build(BuildContext context) {
     final item = widget.item;
     final frames = _frames;
+    final canCreate =
+        item.unregistered && widget.onCreateSign != null;
 
     return GestureDetector(
-      onTap: frames == null
-          ? null
-          : () => showHandFrameDialog(
-                context,
-                frames: frames,
-                title: item.signName,
-                handedness: item.handedness,
-              ),
+      onTap: canCreate
+          ? () => widget.onCreateSign!(item.signName)
+          : frames == null
+              ? null
+              : () => showHandFrameDialog(
+                    context,
+                    frames: frames,
+                    title: item.signName,
+                    handedness: item.handedness,
+                  ),
       child: Container(
         width: 118,
         padding: const EdgeInsets.all(6),
@@ -74,7 +90,9 @@ class _SignTutorialCardState extends State<_SignTutorialCard> {
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
             color: item.unregistered
-                ? Colors.white12
+                ? (canCreate
+                    ? AppColors.warning.withValues(alpha: 0.65)
+                    : Colors.white12)
                 : frames == null
                     ? Colors.white24
                     : AppColors.primary.withValues(alpha: 0.55),
@@ -122,12 +140,18 @@ class _SignTutorialCardState extends State<_SignTutorialCard> {
   }
 
   /// Word the dictionary does not know — say so plainly instead of
-  /// implying the sign exists but is missing data.
+  /// implying the sign exists but is missing data. Tapping it opens the
+  /// Add New Sign dialog (same as the Signs tab).
   Widget _buildUnregistered() {
+    final tappable = widget.onCreateSign != null;
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        const Icon(Icons.search_off, size: 28, color: Colors.white38),
+        Icon(
+          tappable ? Icons.add_circle_outline : Icons.search_off,
+          size: 28,
+          color: tappable ? AppColors.warning : Colors.white38,
+        ),
         const SizedBox(height: 6),
         const Text(
           'Not a registered sign',
@@ -141,7 +165,7 @@ class _SignTutorialCardState extends State<_SignTutorialCard> {
         ),
         const SizedBox(height: 2),
         Text(
-          'Create this sign',
+          tappable ? 'Tap to create this sign' : 'Create this sign',
           textAlign: TextAlign.center,
           style: TextStyle(
             fontSize: 10,
