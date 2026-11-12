@@ -133,12 +133,20 @@ Future<List<SignTutorialItem>> _match(String sentence) async {
         if ((nameById[id] ?? '').isNotEmpty) nameById[id]!,
     ];
     if (names.isNotEmpty) {
-      final result = await SyncService().downloadRecordingsForSigns(names);
-      if (result.success) {
-        // Success (even with 0 rows) settles it for this session; an
-        // offline failure leaves the sign eligible for retry next sentence.
-        _cloudChecked.addAll(fetchable);
-        if (result.synced > 0) await loadFrames(fetchable);
+      // Inner try/catch: a cloud failure must not throw away the local
+      // frames already matched above — the strip still renders them.
+      try {
+        final result = await SyncService()
+            .downloadRecordingsForSigns(names)
+            .timeout(const Duration(seconds: 12));
+        if (result.success) {
+          // Success (even with 0 rows) settles it for this session; an
+          // offline failure leaves the sign eligible for retry next sentence.
+          _cloudChecked.addAll(fetchable);
+          if (result.synced > 0) await loadFrames(fetchable);
+        }
+      } catch (e) {
+        debugPrint('Sign tutorial cloud fetch failed (local data kept): $e');
       }
     }
   }

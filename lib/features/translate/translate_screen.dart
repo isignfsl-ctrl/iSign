@@ -70,6 +70,12 @@ class TranslateScreenState extends State<TranslateScreen>
   bool _isPressingToTalk = false;
   final List<String> _speechSentences = [];
   List<SignTutorialItem> _signTutorial = [];
+  // True once a lookup has finished for the current sentence — lets the UI
+  // show "no signs matched" instead of silently rendering nothing.
+  bool _signTutorialChecked = false;
+  // The sentence the current strip was matched against; cards are only
+  // shown while it is still the latest sentence.
+  String _signTutorialSentence = '';
   bool _sttPermissionChecked = false;
   List<String> _alternativeSigns = [];
   Timer? _altTimer;
@@ -490,7 +496,11 @@ class TranslateScreenState extends State<TranslateScreen>
   Future<void> _refreshSignTutorial(String sentence) async {
     final items = await matchSignTutorial(sentence);
     if (!mounted) return;
-    setState(() => _signTutorial = items);
+    setState(() {
+      _signTutorial = items;
+      _signTutorialChecked = true;
+      _signTutorialSentence = sentence;
+    });
   }
 
   void _clearConversation() {
@@ -499,6 +509,8 @@ class TranslateScreenState extends State<TranslateScreen>
       _translatedText = '';
       _sttStatusMessage = '';
       _signTutorial = [];
+      _signTutorialChecked = false;
+      _signTutorialSentence = '';
       _resetSavedConversation();
     });
   }
@@ -954,9 +966,27 @@ class TranslateScreenState extends State<TranslateScreen>
                           ),
                         ),
                         // Signs for the latest sentence, right where the deaf
-                        // person is reading it.
-                        if (isLast && _signTutorial.isNotEmpty)
-                          SignTutorialStrip(items: _signTutorial),
+                        // person is reading it. The strip only appears once the
+                        // lookup has finished FOR THIS sentence; when no sign
+                        // in the sentence exists in the dictionary, say so
+                        // instead of rendering nothing.
+                        if (isLast &&
+                            _signTutorialChecked &&
+                            _signTutorialSentence == _speechSentences[i])
+                          if (_signTutorial.isNotEmpty)
+                            SignTutorialStrip(items: _signTutorial)
+                          else
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 8),
+                              child: Text(
+                                'No signs matched this sentence yet — the dictionary may not contain these words.',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.white.withValues(alpha: 0.55),
+                                  height: 1.3,
+                                ),
+                              ),
+                            ),
                       ],
                     );
                   },

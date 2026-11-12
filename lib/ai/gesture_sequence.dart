@@ -6,7 +6,10 @@ class GestureSequence {
   static const _maxSequenceLength = 100;
   static const double _velocityThreshold = 0.015;
   static const double _highConfThreshold = 0.75;
-  static const Duration _phrasePause = Duration(milliseconds: 800);
+  // Only a real end-of-thought pause closes a sentence. 800ms fired on
+  // nearly every word (careful signing pauses that long), so the output
+  // read as one short sentence per sign instead of flowing words.
+  static const Duration _phrasePause = Duration(seconds: 3);
 
   final List<String> _sequence = [];
   final List<int> _phraseBreaks = [];
@@ -120,7 +123,9 @@ class GestureSequence {
   String removeLast() {
     if (_sequence.isEmpty) return '';
     final removed = _sequence.removeLast();
-    _phraseBreaks.remove(_sequence.length);
+    // Drop breaks that pointed at (or beyond) the removed word — a stale
+    // index would later insert a '.' in the middle of a sentence.
+    _phraseBreaks.removeWhere((b) => b >= _sequence.length);
     return removed;
   }
 }
