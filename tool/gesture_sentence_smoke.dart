@@ -2,11 +2,13 @@
 //  - normal signing gaps -> spaces only, one final period
 //  - a >=3s full stop     -> '. ' sentence break
 //  - removeLast()          -> no stale break indexes
-import '../lib/ai/gesture_sequence.dart';
-import '../lib/ai/classification_result.dart';
+import 'dart:io';
+
+import 'package:isign/ai/gesture_sequence.dart';
+import 'package:isign/ai/classification_result.dart';
 
 void check(bool ok, String msg) {
-  print('${ok ? 'PASS' : 'FAIL'}: $msg');
+  stdout.writeln('${ok ? 'PASS' : 'FAIL'}: $msg');
   if (!ok) failures++;
 }
 
@@ -84,6 +86,6 @@ void main() {
   g = seq();
   check(g.translatedText == '', 'empty sequence -> empty text');
 
-  print(failures == 0 ? '\nALL PASSED' : '\n$failures FAILED');
+  stdout.writeln(failures == 0 ? '\nALL PASSED' : '\n$failures FAILED');
   if (failures > 0) throw Exception('$failures checks failed');
 }

@@ -28,25 +28,79 @@ String normalizeSignText(String s) {
   return buf.toString().replaceAll(RegExp(r'\s+'), ' ').trim();
 }
 
+/// One segment of a spoken sentence in reading order: either a dictionary
+/// sign (possibly spanning several words, e.g. "How are you?") or a single
+/// word the dictionary does not know ([signId] == null).
+///
+/// The tutorial strip renders a card per segment, so every word of the
+/// sentence is accounted for instead of only the matched signs.
+class SignSegment {
+  /// Surface text for display: the raw word for unmatched words, the raw
+  /// words of the phrase joined for matches.
+  final String display;
+
+  /// Matched catalog sign id, or null when no sign exists for this word.
+  final int? signId;
+
+  /// Normalized tokens consumed (phrase length, or 1 for a single word).
+  final int tokenCount;
+
+  const SignSegment({
+    required this.display,
+    this.signId,
+    required this.tokenCount,
+  });
+
+  bool get isSign => signId != null;
+}
+
 class _Phrase {
   final List<String> words;
   final int signId;
   const _Phrase(this.words, this.signId);
 }
 
-/// Matches [sentence] against [catalog] entries of
-/// `(signId, signName, englishName)` and returns the matched sign ids in
-/// reading order, each at most once.
+/// Splits [sentence] into (normalized, display) token pairs.
 ///
-/// Greedy longest-phrase-first: at every token position the longest catalog
-/// phrase that matches wins, so multi-word signs ("Mga Karaniwang Parirala")
-/// beat their component words. Unmatched words are skipped silently.
-List<int> matchSignIds(String sentence, List<(int, String, String?)> catalog) {
-  final tokenList = normalizeSignText(sentence)
-      .split(' ')
-      .where((w) => w.isNotEmpty)
-      .toList();
-  if (tokenList.isEmpty) return const [];
+/// Normalization runs per whitespace-delimited raw word so the display
+/// keeps the speaker's surface form ("I'm" instead of "im"); a raw word
+/// that normalizes to several tokens ("thank,you") falls back to the
+/// normalized pieces. Tokenizing the whole string and splitting per word
+/// produce the same normalized stream — punctuation becomes spaces either
+/// way — so phrase matching behaves identically.
+List<(String, String)> _tokenize(String sentence) {
+  final out = <(String, String)>[];
+  for (final raw in sentence.split(RegExp(r'\s+'))) {
+    if (raw.isEmpty) continue;
+    final norm = normalizeSignText(raw);
+    if (norm.isEmpty) continue;
+    final pieces =
+        norm.split(' ').where((w) => w.isNotEmpty).toList(growable: false);
+    for (final p in pieces) {
+      out.add((p, pieces.length == 1 ? raw : p));
+    }
+  }
+  return out;
+}
+
+/// Matches [sentence] against [catalog] entries of
+/// `(signId, signName, englishName)` and returns ONE segment per word of
+/// the sentence, in reading order:
+///
+///  * dictionary hits become a single segment spanning all their tokens
+///    (multi-word signs like "How are you?" collapse to one segment),
+///  * every other word becomes its own segment with `signId == null`, so
+///    the UI can tell the user the word is not a registered sign yet.
+///
+/// Greedy longest-phrase-first: at every token position the longest
+/// catalog phrase that matches wins, so multi-word signs beat their
+/// component words.
+List<SignSegment> matchSignSegments(
+    String sentence, List<(int, String, String?)> catalog) {
+  final tokens = _tokenize(sentence);
+  if (tokens.isEmpty) return const [];
+  final normTokens = [for (final t in tokens) t.$1];
+  final dispTokens = [for (final t in tokens) t.$2];
 
   // Build the phrase list from both name variants (Filipino sign name and
   // English name), longest first so multi-word signs match before their
@@ -66,16 +120,17 @@ List<int> matchSignIds(String sentence, List<(int, String, String?)> catalog) {
   }
   phrases.sort((a, b) => b.words.length.compareTo(a.words.length));
 
-  // Greedy scan: at each position take the longest phrase that matches.
-  final matchedIds = <int>[];
+  // Greedy scan: at each position take the longest phrase that matches;
+  // otherwise emit the word as an unmatched segment.
+  final segments = <SignSegment>[];
   var i = 0;
-  while (i < tokenList.length) {
+  while (i < normTokens.length) {
     _Phrase? hit;
     for (final p in phrases) {
-      if (p.words.length > tokenList.length - i) continue;
+      if (p.words.length > normTokens.length - i) continue;
       var ok = true;
       for (var k = 0; k < p.words.length; k++) {
-        if (tokenList[i + k] != p.words[k]) {
+        if (normTokens[i + k] != p.words[k]) {
           ok = false;
           break;
         }
@@ -86,11 +141,31 @@ List<int> matchSignIds(String sentence, List<(int, String, String?)> catalog) {
       }
     }
     if (hit != null) {
-      if (!matchedIds.contains(hit.signId)) matchedIds.add(hit.signId);
+      segments.add(SignSegment(
+        display: dispTokens.sublist(i, i + hit.words.length).join(' '),
+        signId: hit.signId,
+        tokenCount: hit.words.length,
+      ));
       i += hit.words.length;
     } else {
+      segments.add(SignSegment(display: dispTokens[i], tokenCount: 1));
       i++;
     }
   }
-  return matchedIds;
+  return segments;
+}
+
+/// Matches [sentence] against [catalog] and returns the matched sign ids
+/// in reading order, each at most once — unmatched words are skipped.
+///
+/// Thin dedupe wrapper over [matchSignSegments]; the tutorial strip uses
+/// the segments directly so it can also render unmatched words.
+List<int> matchSignIds(String sentence, List<(int, String, String?)> catalog) {
+  final ids = <int>[];
+  for (final seg in matchSignSegments(sentence, catalog)) {
+    if (seg.signId != null && !ids.contains(seg.signId)) {
+      ids.add(seg.signId!);
+    }
+  }
+  return ids;
 }

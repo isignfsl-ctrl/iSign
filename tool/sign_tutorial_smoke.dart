@@ -88,6 +88,41 @@ void main() {
   // Empty / whitespace input.
   check('empty input', matchSignIds('   ', catalog), [], nameById);
 
+  // --- Segments: one card per word of the sentence. -------------------
+  String segLabel(List<SignSegment> segs) => [
+        for (final s in segs)
+          s.isSign ? '${s.display}=>${nameById[s.signId]}' : '${s.display}=>-'
+      ].join(' | ');
+
+  void checkSeg(String label, String sentence, String want) {
+    final got = segLabel(matchSignSegments(sentence, catalog));
+    final ok = got == want;
+    if (!ok) _failures++;
+    stdout.writeln(
+        '${ok ? 'PASS' : 'FAIL'}  segments: $label\n      got: [$got]  want: [$want]');
+  }
+
+  // Matched phrase collapses to one segment; unknown words each get one.
+  checkSeg('How are you? collapses', 'How are you?',
+      'How are you?=>Kumusta ka?');
+  checkSeg('unknown words kept', 'The quick brown fox jumps',
+      'The=>- | quick=>- | brown=>- | fox=>- | jumps=>-');
+  checkSeg('mixed match + unknown', 'Thank you very much',
+      'Thank you=>Salamat | very=>- | much=>-');
+  checkSeg('every word of "Salamat po"', 'Salamat po',
+      'Salamat=>Salamat | po=>-');
+  // Reading order + token accounting: segments cover every token exactly.
+  final segs = matchSignSegments('Please help me today', catalog);
+  final totalTokens =
+      segs.fold<int>(0, (sum, s) => sum + s.tokenCount);
+  final tokenCount =
+      normalizeSignText('Please help me today').split(' ').length;
+  final coverOk = totalTokens == tokenCount;
+  if (!coverOk) _failures++;
+  stdout.writeln(
+      '${coverOk ? 'PASS' : 'FAIL'}  segments cover every token'
+      '  ($totalTokens vs $tokenCount)');
+
   stdout.writeln('');
   if (_failures > 0) {
     stderr.writeln('$_failures failure(s)');

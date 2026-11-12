@@ -4,23 +4,32 @@ import '../../data/database/db_helper.dart';
 import '../../shared/services/sync_service.dart';
 import 'sign_tutorial_matcher.dart';
 
-/// One sign matched from a spoken sentence, together with its recorded
-/// hand-frame data — the "image of what the sign looks like".
+/// One segment of a spoken sentence shown in the speech-mode tutorial:
+/// either a dictionary sign with its recorded hand-frame data (the
+/// "image of what the sign looks like"), or a word the dictionary does
+/// not know ([unregistered] == true), so every word of the sentence gets
+/// a card.
 ///
 /// [framesJson] is the raw stored payload (`parseHandFrames` in
 /// `hand_frame_player.dart` parses it); null means no recording exists for
 /// this sign yet.
 class SignTutorialItem {
-  final int signId;
+  final int? signId;
   final String signName;
   final String? framesJson;
   final String? handedness;
 
+  /// True when the word is not a registered sign in the catalog — the
+  /// card tells the user so (and that it can be created) instead of
+  /// pretending it is a sign that merely lacks data.
+  final bool unregistered;
+
   const SignTutorialItem({
-    required this.signId,
+    this.signId,
     required this.signName,
     this.framesJson,
     this.handedness,
+    this.unregistered = false,
   });
 
   bool get hasImage => framesJson != null;
@@ -33,8 +42,10 @@ class SignTutorialItem {
 final Set<int> _cloudChecked = {};
 
 /// Matches a recognized sentence against the local sign catalog and returns
-/// the signs it references, in reading order (see `matchSignIds` for the
-/// matching rules).
+/// one item per word of the sentence, in reading order (see
+/// [matchSignSegments] for the matching rules): dictionary signs carry
+/// their recorded frames, and words with no registered sign come back
+/// with `unregistered == true` so the UI can say so.
 ///
 /// Frame data comes from, in order:
 ///  1. approved cloud recordings cached locally (`reference_landmarks`),
@@ -61,7 +72,6 @@ Future<List<SignTutorialItem>> _match(String sentence) async {
     'fsl_signs',
     columns: ['id', 'sign_name', 'english_name'],
   );
-  if (rows.isEmpty) return const [];
 
   final catalog = <(int, String, String?)>[];
   final nameById = <int, String>{};
@@ -75,8 +85,18 @@ Future<List<SignTutorialItem>> _match(String sentence) async {
     nameById[id] = signName.isNotEmpty ? signName : englishName;
   }
 
-  final matchedIds = matchSignIds(sentence, catalog);
-  if (matchedIds.isEmpty) return const [];
+  // One segment per word of the sentence: matched signs (possibly
+  // multi-word) plus every unmatched word, so the strip can render a
+  // card for each instead of silently dropping unknown words.
+  final segments = matchSignSegments(sentence, catalog);
+  if (segments.isEmpty) return const [];
+
+  final matchedIds = <int>[];
+  for (final s in segments) {
+    if (s.signId != null && !matchedIds.contains(s.signId)) {
+      matchedIds.add(s.signId!);
+    }
+  }
 
   // Recorded frames per sign: approved cloud samples first (one row per
   // sample, MAX(id) GROUP BY sign_id so each sign yields exactly one row —
@@ -152,12 +172,21 @@ Future<List<SignTutorialItem>> _match(String sentence) async {
   }
 
   return [
-    for (final id in matchedIds)
-      SignTutorialItem(
-        signId: id,
-        signName: nameById[id] ?? '',
-        framesJson: frameBySign[id]?['landmarks_json'] as String?,
-        handedness: frameBySign[id]?['handedness'] as String?,
-      ),
+    for (final seg in segments)
+      seg.signId != null
+          ? SignTutorialItem(
+              signId: seg.signId,
+              signName: nameById[seg.signId] ?? seg.display,
+              framesJson: frameBySign[seg.signId]?['landmarks_json']
+                  as String?,
+              handedness:
+                  frameBySign[seg.signId]?['handedness'] as String?,
+            )
+          : SignTutorialItem(
+              // Not a registered sign: the card says so (and that it can
+              // be created) rather than showing an empty image slot.
+              signName: seg.display,
+              unregistered: true,
+            ),
   ];
 }
