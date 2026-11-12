@@ -531,6 +531,25 @@ class TranslateScreenState extends State<TranslateScreen>
     });
   }
 
+  /// Starts a fresh gesture conversation: wipes the accumulated signs so
+  /// the output box, Recent Translations record and phrase breaks all
+  /// start over (the speech-mode Clear button does the same for
+  /// `_speechSentences`).
+  void _clearGestureConversation() {
+    setState(() {
+      _gestureSequence.reset();
+      _translatedText = '';
+      _currentLabel = '';
+      _currentConfidence = 0.0;
+      _alternativeSigns.clear();
+      _altTimer?.cancel();
+      // _translatedText is already '' here, so _resetSavedConversation
+      // seeds _lastSavedText with '' — the next recognized sign differs
+      // from it and opens a new Recent Translations record.
+      _resetSavedConversation();
+    });
+  }
+
   /// Saves the conversation as ONE record: the first save inserts a
   /// translation row plus a single detail row holding the whole sentence;
   /// later saves rewrite that same detail row as the sentence grows. Word
@@ -1376,6 +1395,12 @@ class TranslateScreenState extends State<TranslateScreen>
                         color: Colors.amber,
                         onPressed: _shareTranscript,
                       ),
+                      _iconButton(
+                        icon: Icons.clear_all,
+                        label: 'Clear',
+                        color: Colors.redAccent,
+                        onPressed: _clearGestureConversation,
+                      ),
                     ],
                   ),
                 ],
@@ -1400,6 +1425,12 @@ class TranslateScreenState extends State<TranslateScreen>
                     icon: Icons.share,
                     label: 'Share',
                     color: Colors.amber,
+                    onPressed: null,
+                  ),
+                  _iconButton(
+                    icon: Icons.clear_all,
+                    label: 'Clear',
+                    color: Colors.redAccent,
                     onPressed: null,
                   ),
                 ],
